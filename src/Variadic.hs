@@ -21,6 +21,19 @@ instance (All Show ts) => Show (HList ts) where
   show HNil       = "HNil"
   show (x ::: xs) = show x ++ " ::: " ++ show xs
 
+data TList (ts :: [k]) where
+  TNil  :: TList '[]
+  TCons :: TList ts -> TList (t : ts)
+
+class KnownTypes (ts :: [k]) where
+  types :: TList ts
+
+instance KnownTypes '[] where
+  types = TNil
+
+instance KnownTypes ts => KnownTypes (t : ts) where
+  types = TCons types
+
 --------------------------------------------------------------------------------
 
 type family Args (f :: *) :: [*] where
@@ -61,19 +74,41 @@ expandVariad (Arg lambda) = \a -> expandVariad (lambda a)
 
 --------------------------------------------------------------------------------
 
-class Collect (args :: [*]) (function :: *) where
-   collect :: function -> Variad args (WithoutArgs args function)
+class Chutney (args :: [*]) (function :: *) where
+   collapse :: function -> Variad args (WithoutArgs args function)
+   expand   :: Variad args (WithoutArgs args function) -> function
 
-instance Collect '[] x where
-  collect x = Res x
+instance Chutney '[] x where
+  collapse x   = Res x
+  expand (Res x) = x
 
-instance Collect args rest => Collect (a : args) (a -> rest) where
-  collect f = Arg (\a -> collect (f a))
+instance Chutney args rest => Chutney (a : args) (a -> rest) where
+  collapse f     = Arg (\a -> collapse (f a))
+  expand (Arg f) = \a -> expand (f a)
 
-collectAll :: Collect (Args function) function => function -> Variad (Args function) (Result function)
-collectAll = collect
+collapseAll :: Chutney (Args function) function
+            => function -> Variad (Args function) (Result function)
+collapseAll = collapse
+
+expandAll :: Chutney (Args function) function
+          => Variad (Args function) (Result function) -> function
+expandAll = expand
 
 --------------------------------------------------------------------------------
 
-unchutney :: Collect (Args function) function => function -> HList (Args function) -> Result function
-unchutney f = applyVariad (collectAll f)
+collect :: KnownTypes xs => (HList xs -> res) -> Variad xs res
+collect k = go types k
+  where
+    go :: TList xs -> (HList xs -> res) -> Variad xs res
+    go TNil       k = Res (k HNil)
+    go (TCons ts) k = Arg (\a -> go ts (k . (a :::)))
+
+unchutney :: Chutney (Args function) function
+          => function
+          -> (HList (Args function) -> Result function)
+unchutney = applyVariad . collapseAll
+
+chutney :: (Chutney (Args function) function, KnownTypes (Args function))
+        => (HList (Args function) -> Result function)
+        -> function
+chutney f = expandAll (collect f)
