@@ -15,7 +15,7 @@ type family All (f :: k -> Constraint) (ts :: [k]) :: Constraint where
 --------------------------------------------------------------------------------
 -- Heterogeneous lists indexed by the types of their contents
 
-data HList (ts :: [k]) where
+data HList (ts :: [*]) where
   HNil  :: HList '[]
   (:::) :: t -> HList ts -> HList (t : ts)
 
@@ -38,7 +38,7 @@ instance KnownTypes ts => KnownTypes (t : ts)    where types = TCons types
 
 -- Given a function, return a list of all its argument types
 type family Args (f :: *) :: [*] where
-  Args (a -> rest) = a :  Args rest
+  Args (a -> rest) = a : Args rest
   Args x           = '[]
 
 -- Given a list of argument types and a "rest" of type return a curried function
@@ -63,15 +63,25 @@ data Variad (args :: [*]) (res :: *) where
   Res :: res -> Variad '[] res
   Arg :: (a -> Variad args res) -> Variad (a : args) res
 
+runVariad :: Variad (a : args) res -> a -> Variad args res
+runVariad (Arg f) = f
+
 -- It's a functor...
 instance Functor (Variad args) where
   fmap f (Res res)    = Res (f res)
   fmap f (Arg lambda) = Arg (\a -> fmap f (lambda a))
 
--- And it's an Apply, but *not* an Applicative, because it has no pure
-instance Apply (Variad args) where
-  Res f <.> Res a = Res (f a)
-  Arg l <.> Arg m = Arg (\a -> (l a) <.> (m a))
+-- And an applicative
+instance Applicative (Variad '[]) where
+  pure = Res
+  Res f <*> Res a = Res (f a)
+
+instance Applicative (Variad args) => Applicative (Variad (a : args)) where
+  pure = Arg . const . pure
+  Arg l <*> Arg m = Arg (\a -> l a <*> m a)
+
+-- Variad is also a monad, but the instance would be annoying to write,
+-- and we don't think it's very useful. Feel free to prove us wrong :)
 
 -- We can apply a variad to a matching list of arguments
 applyVariad :: Variad args res -> HList args -> res
