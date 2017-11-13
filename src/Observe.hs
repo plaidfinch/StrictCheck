@@ -1,5 +1,5 @@
 {-# language TypeInType, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances, BangPatterns #-}
-{-# OPTIONS_GHC -Wnoname-shadowing #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 ------------------------------------------------------------------------
 -- Observing the strictness of Haskell functions from within Haskell! --
@@ -14,7 +14,6 @@ import Data.Foldable
 import Data.Maybe
 import Data.IORef
 import Data.Functor.Identity
-import Data.Functor.Classes
 import Control.DeepSeq
 import Data.Kind
 import Data.List
@@ -109,7 +108,7 @@ demandCount c f as = fromJust . asum $
 
 {-# NOINLINE instrumentListR #-}
 instrumentListR :: IORef Int -> [a] -> [a]
-instrumentListR count [] = []
+instrumentListR _     []       = []
 instrumentListR count (a : as) =
   unsafePerformIO $ do
     atomicModifyIORef' count (\x -> (succ x, ()))
@@ -162,9 +161,14 @@ evaluate !() = return ()
 -- derive their corresponding demand types. We should also be able to derive
 -- Show, Eq, and Arbitrary instances, necessary for QuickCheck.
 
--- TODO: This definition is subtly wrong, in that it cannot represent or
--- instrument whether a nil constructor is forced. We need another case in
--- the ADT for ListDemand which contains a (f (Maybe (PrimDemand f)))
+-- TODO: We do not currently represent the *value* of primitives in our demand
+-- types. I think that this is subtly wrong: when we get down to a primitive
+-- (i.e. an integer) we should actually store its value in the demand type. This
+-- means that even more demand transformers will be partial--but this does not
+-- matter, because they will always be handed the *actual* demand for a
+-- particular situation. We want to represent the *entire subshape* of the
+-- input, and we're not doing so if we don't put actual primitives in the slot
+-- where they belong.
 
 data ListDemand (d :: (* -> *) -> *) (f :: * -> *) =
   Cons (f (Maybe (d f)))
@@ -174,16 +178,20 @@ data ListDemand (d :: (* -> *) -> *) (f :: * -> *) =
 showDemand_primList :: Maybe (ListDemand PrimDemand Identity) -> String
 showDemand_primList Nothing = "…"
 showDemand_primList (Just list) =
-  "[" ++ intercalate ", " (go list) ++ ", …"
+  let strings = go list
+      prefix = init strings
+      termination = last strings
+  in "[" ++ (intercalate ", " prefix) ++ termination
   where
-    go Nil = []
+    go Nil = ["]"]
     go (Cons (Identity x) (Identity xs)) =
-      let xs' = fromMaybe [] (go <$> xs)
+      let xs' = fromMaybe [", …"] (go <$> xs)
           x' = case x of
                  Just Demanded -> "■"
                  Nothing       -> "_"
       in x' : xs'
 
+printDemand_primList :: Maybe (ListDemand PrimDemand Identity) -> IO ()
 printDemand_primList = putStrLn . showDemand_primList
 
 data PrimDemand f = Demanded deriving Show
