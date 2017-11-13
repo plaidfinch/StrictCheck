@@ -88,7 +88,7 @@ decreasingBottoms as =
 
 
 {-# NOINLINE demandCount #-}
-demandCount :: (b -> ()) -> ([a] -> b) -> [a] -> Int
+demandCount :: Context b -> ([a] -> b) -> [a] -> Int
 demandCount c f as = fromJust . asum $
   map fstIfDefined $
         zip [0..] $ fmap (c . f) (decreasingBottoms as)
@@ -115,7 +115,7 @@ instrumentListR count (a : as) =
     return $ a : instrumentListR count as
 
 {-# NOINLINE demandCount' #-}
-demandCount' :: (b -> ()) -> ([a] -> b) -> [a] -> Int
+demandCount' :: Context b -> ([a] -> b) -> [a] -> Int
 demandCount' c f as =
   unsafePerformIO $ do
     count <- newIORef 0
@@ -197,7 +197,7 @@ type ListOfPairsOfIntsDemand =
 -- Calculate the demand on the list as when f is run on it in the context c
 
 {-# NOINLINE demandList #-}
-demandList :: (b -> ()) -> ([a] -> b) -> [a]
+demandList :: Context b -> ([a] -> b) -> [a]
            -> Maybe (ListDemand PrimDemand Identity)
 demandList c f as =
   unsafePerformIO $ do
