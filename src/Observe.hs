@@ -160,6 +160,10 @@ evaluate !() = return ()
 -- derive their corresponding demand types. We should also be able to derive
 -- Show, Eq, and Arbitrary instances, necessary for QuickCheck.
 
+-- TODO: This definition is subtly wrong, in that it cannot represent or
+-- instrument whether a nil constructor is forced. We need another case in
+-- the ADT for ListDemand which contains a (f (Maybe (PrimDemand f)))
+
 data ListDemand (d :: (* -> *) -> *) (f :: * -> *) =
   Cons (f (Maybe (d f)))
        (f (Maybe (ListDemand d f)))
