@@ -11,7 +11,7 @@ import Control.Spoon
 import Data.Coerce
 import Data.Foldable
 import Data.Maybe
-import Data.IORef  -- TODO: use IVars instead?
+import Data.IORef
 import Data.Functor.Identity
 import Data.Functor.Classes
 import Control.DeepSeq
@@ -85,6 +85,7 @@ decreasingBottoms as =
   fmap (zipWith const as) unitBottoms
     where
       unitBottoms = undefined : map (() :) unitBottoms
+
 
 {-# NOINLINE demandCount #-}
 demandCount :: (b -> ()) -> ([a] -> b) -> [a] -> Int
