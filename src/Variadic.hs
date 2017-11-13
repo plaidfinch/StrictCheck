@@ -83,12 +83,13 @@ applyFunction (Res res)    HNil         = res
 applyFunction (Arg lambda) (a ::: rest) = applyFunction (lambda a) rest
 
 -- A nice infix notation for applying a Function
+($$) :: Function args res -> HList args -> res
 ($$) = applyFunction
 
 -- Additionally, we can transform a function from a heterogeneous list to some
 -- result into a Function.
 toFunction :: KnownTypes xs => (HList xs -> res) -> Function xs res
-toFunction k = go types k
+toFunction f = go types f
   where
     -- The use of CPS style here prevents quadratic blowup
     go :: Types xs -> (HList xs -> res) -> Function xs res
