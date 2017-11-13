@@ -199,11 +199,11 @@ type ListOfPairsOfIntsDemand =
 {-# NOINLINE demandList #-}
 demandList :: Context b -> ([a] -> b) -> [a]
            -> (b, Maybe (ListDemand PrimDemand Identity))
-demandList c f as =
+demandList context function as =
   unsafePerformIO $ do
     topDemand <- newIORef Nothing
-    let result = f $ instrumentListD topDemand as
-    evaluate $ c result
+    let result = function $ instrumentListD topDemand as
+    evaluate $ context result
     resultDemand <- traverse derefDemand =<< readIORef topDemand
     return (result, resultDemand)
 
