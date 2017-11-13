@@ -1,4 +1,5 @@
 {-# language TypeInType, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances, BangPatterns #-}
+{-# OPTIONS_GHC -Wnoname-shadowing #-}
 
 ------------------------------------------------------------------------
 -- Observing the strictness of Haskell functions from within Haskell! --
@@ -168,12 +169,14 @@ evaluate !() = return ()
 data ListDemand (d :: (* -> *) -> *) (f :: * -> *) =
   Cons (f (Maybe (d f)))
        (f (Maybe (ListDemand d f)))
+  | Nil
 
 showDemand_primList :: Maybe (ListDemand PrimDemand Identity) -> String
 showDemand_primList Nothing = "…"
 showDemand_primList (Just list) =
   "[" ++ intercalate ", " (go list) ++ ", …"
   where
+    go Nil = []
     go (Cons (Identity x) (Identity xs)) =
       let xs' = fromMaybe [] (go <$> xs)
           x' = case x of
@@ -213,6 +216,7 @@ derefDemand :: ListDemand PrimDemand IORef
             -> IO (ListDemand PrimDemand Identity)
 derefDemand demand = do
   case demand of
+    Nil -> return Nil
     Cons primRef listRef ->
       do primDemand <- coerce <$> readIORef primRef
          maybeListDemand <- readIORef listRef
@@ -233,7 +237,9 @@ derefDemand demand = do
 instrumentListD :: IORef (Maybe (ListDemand PrimDemand IORef)) -> [a] -> [a]
 instrumentListD demand as =
   case as of
-    [] -> []
+    [] -> unsafePerformIO $ do
+            writeIORef demand (Just Nil)
+            return []
     (a : as) ->
       unsafePerformIO $ do
         primDemand <- newIORef Nothing

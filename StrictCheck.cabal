@@ -20,3 +20,4 @@ library
                        spoon >= 0.3.1,
                        deepseq >= 1.4
   exposed-modules:     Variadic, Observe
+  ghc-options:         -Wall
