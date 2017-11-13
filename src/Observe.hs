@@ -206,7 +206,8 @@ demandList c f as =
 
 -- Recursively traverse a pointer-based demand and freeze it into an immutable
 -- demand suitable for the user-facing API.
-derefDemand :: ListDemand PrimDemand IORef -> IO (ListDemand PrimDemand Identity)
+derefDemand :: ListDemand PrimDemand IORef
+            -> IO (ListDemand PrimDemand Identity)
 derefDemand demand = do
   case demand of
     Cons primRef listRef ->
