@@ -198,12 +198,14 @@ type ListOfPairsOfIntsDemand =
 
 {-# NOINLINE demandList #-}
 demandList :: Context b -> ([a] -> b) -> [a]
-           -> Maybe (ListDemand PrimDemand Identity)
+           -> (b, Maybe (ListDemand PrimDemand Identity))
 demandList c f as =
   unsafePerformIO $ do
     topDemand <- newIORef Nothing
-    evaluate $ c . f $ instrumentListD topDemand as
-    traverse derefDemand =<< readIORef topDemand
+    let result = f $ instrumentListD topDemand as
+    evaluate $ c result
+    resultDemand <- traverse derefDemand =<< readIORef topDemand
+    return (result, resultDemand)
 
 -- Recursively traverse a pointer-based demand and freeze it into an immutable
 -- demand suitable for the user-facing API.
