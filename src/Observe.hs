@@ -39,6 +39,9 @@ whnf = flip seq ()
 spineStrict :: Context [a]
 spineStrict = flip seq () . foldl' (flip (:)) []
 
+nthStrict :: Int -> Context [a]
+nthStrict n = flip seq () . (!! n)
+
 allStrict :: NFData a => Context [a]
 allStrict = rnf
 
@@ -160,15 +163,6 @@ evaluate !() = return ()
 -- NOTE: Based on the structure of these types, we can certainly generically
 -- derive their corresponding demand types. We should also be able to derive
 -- Show, Eq, and Arbitrary instances, necessary for QuickCheck.
-
--- TODO: We do not currently represent the *value* of primitives in our demand
--- types. I think that this is subtly wrong: when we get down to a primitive
--- (i.e. an integer) we should actually store its value in the demand type. This
--- means that even more demand transformers will be partial--but this does not
--- matter, because they will always be handed the *actual* demand for a
--- particular situation. We want to represent the *entire subshape* of the
--- input, and we're not doing so if we don't put actual primitives in the slot
--- where they belong.
 
 data ListDemand (d :: (* -> *) -> *) (f :: * -> *) =
   Cons (f (Maybe (d f)))
