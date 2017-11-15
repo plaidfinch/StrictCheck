@@ -17,6 +17,10 @@ import Data.Functor.Identity
 import Control.DeepSeq
 import Data.Kind
 import Data.List
+import Data.Function
+import Data.Functor.Contravariant
+import Data.Functor.Contravariant.Divisible
+import Data.Void
 
 -- NOTE: In this module, we specialize to functions on lists (of primitives).
 -- The end goal is to turn this into a generic programming library which lets
@@ -28,37 +32,56 @@ import Data.List
 --------------------------------------------------------------------------------
 -- Some useful contexts for testing demand
 
-type Context a = a -> ()
+newtype Context a = Context (a -> ())
 
 lazy :: Context [a]
-lazy = const ()
+lazy = Context $ const ()
 
 whnf :: Context [a]
-whnf = flip seq ()
+whnf = Context $ flip seq ()
 
 spineStrict :: Context [a]
-spineStrict = flip seq () . foldl' (flip (:)) []
+spineStrict = Context $ flip seq () . foldl' (flip (:)) []
 
 nthStrict :: Int -> Context [a]
-nthStrict n = flip seq () . (!! n)
+nthStrict n = Context $ flip seq () . (!! n)
 
 allStrict :: NFData a => Context [a]
-allStrict = rnf
+allStrict = Context $ rnf
 
 oddStrict :: NFData a => Context [a]
-oddStrict []           = ()
-oddStrict [x]          = rnf x
-oddStrict (x : _ : xs) = rnf x `seq` oddStrict xs
+oddStrict = Context . fix $ \os list ->
+  case list of
+    []           -> ()
+    [x]          -> rnf x
+    (x : _ : xs) -> rnf x `seq` os xs
 
 evenStrict :: NFData a => Context [a]
-evenStrict []           = ()
-evenStrict [_]          = ()
-evenStrict (_ : x : xs) = rnf x `seq` evenStrict xs
+evenStrict = Context . fix $ \os list ->
+  case list of
+    []           -> ()
+    [_]          -> ()
+    (_ : x : xs) -> rnf x `seq` os xs
 
+instance Contravariant Context where
+  contramap f (Context c) = Context (c . f)
 
--- Combine contexts to demand the union of their demands
-(!!!) :: Context a -> Context a -> Context a
-(!!!) c d = \a -> c a `seq` d a
+instance Divisible Context where
+  conquer = Context $ const ()
+  divide f (Context x) (Context y) =
+    Context $ \a ->
+      let (v, w) = f a
+      in x v `seq` y w
+
+instance Decidable Context where
+  lose f = Context $ \a -> absurd (f a)
+  choose f (Context x) (Context y) =
+    Context $ \a ->
+      either x y (f a)
+
+instance Monoid (Context a) where
+  mempty = conquer
+  mappend = divide $ \a -> (a, a)
 
 --------------------------------------------------------------------------------
 
@@ -92,7 +115,7 @@ decreasingBottoms as =
 
 {-# NOINLINE demandCount #-}
 demandCount :: Context b -> ([a] -> b) -> [a] -> Int
-demandCount c f as = fromJust . asum $
+demandCount (Context c) f as = fromJust . asum $
   map fstIfDefined $
         zip [0..] $ fmap (c . f) (decreasingBottoms as)
     where
@@ -119,7 +142,7 @@ instrumentListR count (a : as) =
 
 {-# NOINLINE demandCount' #-}
 demandCount' :: Context b -> ([a] -> b) -> [a] -> Int
-demandCount' c f as =
+demandCount' (Context c) f as =
   unsafePerformIO $ do
     count <- newIORef 0
     evaluate $ c . f $ instrumentListR count as
@@ -204,7 +227,7 @@ type ListOfPairsOfIntsDemand =
 {-# NOINLINE demandList #-}
 demandList :: Context b -> ([a] -> b) -> [a]
            -> (b, Maybe (ListDemand PrimDemand Identity))
-demandList context function as =
+demandList (Context context) function as =
   unsafePerformIO $ do
     topDemand <- newIORef Nothing
     let result = function $ instrumentListD topDemand as
