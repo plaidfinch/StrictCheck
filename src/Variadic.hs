@@ -14,12 +14,12 @@ type family All (f :: k -> Constraint) (ts :: [k]) :: Constraint where
 --------------------------------------------------------------------------------
 -- Heterogeneous lists indexed by the types of their contents
 
-data HList (ts :: [*]) where
-  HNil  :: HList '[]
-  (:::) :: t -> HList ts -> HList (t : ts)
+data Tuple (ts :: [*]) where
+  TEmpty  :: Tuple '[]
+  (:::) :: t -> Tuple ts -> Tuple (t : ts)
 
-instance (All Show ts) => Show (HList ts) where
-  show HNil       = "HNil"
+instance (All Show ts) => Show (Tuple ts) where
+  show TEmpty       = "TEmpty"
   show (x ::: xs) = show x ++ " ::: " ++ show xs
 
 -- A list of types: this is just a "structural proxy"
@@ -78,22 +78,22 @@ instance Applicative (Function args) => Applicative (Function (a : args)) where
 -- I don't think it's very useful. Left as an exercise to the reader.
 
 -- We can apply a Function to a matching list of arguments
-applyFunction :: Function args res -> HList args -> res
-applyFunction (Res res)    HNil         = res
+applyFunction :: Function args res -> Tuple args -> res
+applyFunction (Res res)    TEmpty         = res
 applyFunction (Arg lambda) (a ::: rest) = applyFunction (lambda a) rest
 
 -- A nice infix notation for applying a Function
-($$) :: Function args res -> HList args -> res
+($$) :: Function args res -> Tuple args -> res
 ($$) = applyFunction
 
 -- Additionally, we can transform a function from a heterogeneous list to some
 -- result into a Function.
-toFunction :: KnownTypes xs => (HList xs -> res) -> Function xs res
+toFunction :: KnownTypes xs => (Tuple xs -> res) -> Function xs res
 toFunction f = go types f
   where
     -- The use of CPS style here prevents quadratic blowup
-    go :: Types xs -> (HList xs -> res) -> Function xs res
-    go NoTypes    k = Res (k HNil)
+    go :: Types xs -> (Tuple xs -> res) -> Function xs res
+    go NoTypes    k = Res (k TEmpty)
     go (Types ts) k = Arg (\a -> go ts (k . (a :::)))
 
 --------------------------------------------------------------------------------
@@ -122,10 +122,10 @@ instance Curry args rest => Curry (a : args) (a -> rest) where
 
 curryAll :: Curry (Args function) function
          => function
-         -> (HList (Args function) -> Result function)
+         -> (Tuple (Args function) -> Result function)
 curryAll = applyFunction . curryFunction
 
 uncurryAll :: (Curry (Args function) function, KnownTypes (Args function))
-           => (HList (Args function) -> Result function)
+           => (Tuple (Args function) -> Result function)
            -> function
 uncurryAll = uncurryFunction . toFunction
