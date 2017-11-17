@@ -19,6 +19,17 @@ library
   build-depends:       base >= 4.7 && < 5,
                        spoon >= 0.3.1,
                        deepseq >= 1.4,
-                       contravariant >= 1.4
-  exposed-modules:     Variadic, Observe
+                       contravariant >= 1.4,
+                       QuickCheck                                     
+  exposed-modules:     Variadic, Observe, LazyCoArbitrary
+-- Do something about type defaults?
   ghc-options:         -Wall
+
+executable StrictCheck-exe
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N 
+  build-depends:       base
+                     , StrictCheck
+                     , QuickCheck
+  default-language:    Haskell2010
