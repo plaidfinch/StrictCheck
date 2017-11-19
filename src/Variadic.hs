@@ -19,7 +19,7 @@ data Tuple (ts :: [*]) where
   (:::) :: t -> Tuple ts -> Tuple (t : ts)
 
 instance (All Show ts) => Show (Tuple ts) where
-  show TEmpty       = "TEmpty"
+  show TEmpty     = "TEmpty"
   show (x ::: xs) = show x ++ " ::: " ++ show xs
 
 -- A list of types: this is just a "structural proxy"

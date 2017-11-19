@@ -115,9 +115,10 @@ decreasingBottoms as =
 
 {-# NOINLINE demandCount #-}
 demandCount :: Context b -> ([a] -> b) -> [a] -> Int
-demandCount (Context c) f as = fromJust . asum $
-  map fstIfDefined $
-        zip [0..] $ fmap (c . f) (decreasingBottoms as)
+demandCount (Context c) f as =
+  fromJust . asum $
+    map fstIfDefined $
+       zip [0..] $ fmap (c . f) (decreasingBottoms as)
     where
       fstIfDefined :: (Int, b) -> Maybe Int
       fstIfDefined = fmap fst . sequenceA . fmap teaspoon
