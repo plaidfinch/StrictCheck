@@ -86,21 +86,21 @@ nats, partialNats :: [Nat]
 nats        = iterate S Z
 partialNats = iterate S undefined
 
-continuity :: (Nat -> Nat) -> Int
+continuity :: (Nat -> Nat) -> Integer
 continuity f =
-  length . takeWhile isNothing $
+  genericLength . takeWhile isNothing $
     map (spoon . f) partialNats
 
 prettyRandomNatFunction :: IO ()
 prettyRandomNatFunction = do
   f <- generate natFunction
-  let inputs = take (c + 1) nats
+  let inputs = genericTake (c + 1) nats
       c      = continuity f
   putStrLn $ "\n   Continuity: " ++ show c ++ "\n"
   putStrLn $ "  Input  |  Output"
   putStrLn $ "---------+----------"
   forM_ inputs $ \input ->
-    putStrLn $ "    "
+    putStrLn $ (if natNum input < c then "    " else " ~  ")
             ++ show input
             ++ replicate (5 - (length $ show input)) ' ' ++ "|    "
             ++ show (f input)
