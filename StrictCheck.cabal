@@ -20,15 +20,17 @@ library
                        spoon >= 0.3.1,
                        deepseq >= 1.4,
                        contravariant >= 1.4,
-                       QuickCheck                                     
-  exposed-modules:     Variadic, Observe, LazyCoArbitrary
+                       mtl >= 2.2.1,
+                       transformers >= 0.5,
+                       QuickCheck
+  exposed-modules:     Variadic, Observe, LazyCoArbitrary, Continuations
 -- Do something about type defaults?
   ghc-options:         -Wall
 
 executable StrictCheck-exe
   hs-source-dirs:      app
   main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N 
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
                      , StrictCheck
                      , QuickCheck

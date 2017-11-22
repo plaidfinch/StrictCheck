@@ -88,8 +88,8 @@ continuity f =
   length . takeWhile isNothing $
     map (spoon . f) partialNats
 
-randomExample :: IO ()
-randomExample = do
+prettyRandomNatFunction :: IO ()
+prettyRandomNatFunction = do
   f <- generate natFunction
   let inputs = take (c + 1) nats
       c      = continuity f
