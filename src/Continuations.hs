@@ -7,7 +7,7 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Cont
 import Test.QuickCheck
-import Test.QuickCheck.Gen.Unsafe
+import qualified Test.QuickCheck.Gen.Unsafe as Unsafe
 import Data.Function
 import Control.Spoon
 import Data.List
@@ -40,7 +40,27 @@ m2 k i = do
 -- Experiments in generating random functions over nats --
 ----------------------------------------------------------
 
-data Nat = Z | S Nat deriving (Eq, Show, Generic, NFData)
+data Nat = Z | S Nat deriving (Eq, Generic, NFData)
+
+natNum :: Nat -> Integer
+natNum Z = 0
+natNum (S n) = succ (natNum n)
+
+numNat :: Integer -> Nat
+numNat n | n <= 0    = Z
+         | otherwise = S (numNat (pred n))
+
+instance Num Nat where
+  fromInteger = numNat
+  a + b = numNat $ natNum a + natNum b
+  a - b = numNat $ natNum a - natNum b
+  a * b = numNat $ natNum a * natNum b
+  abs = id
+  signum 0 = 0
+  signum n = 1
+
+instance Show Nat where
+  show = show . natNum
 
 -- must produce exactly one constructor of output
 natProduce :: Gen Nat -> Gen Nat
@@ -60,28 +80,11 @@ natConsume produce nat =
             ]
 
 natFunction :: Gen (Nat -> Nat)
-natFunction = promote $ natConsume natProduce
-
-natNum :: Nat -> Int
-natNum Z = 0
-natNum (S n) = succ (natNum n)
-
-numNat :: Int -> Nat
-numNat 0 = Z
-numNat n = S (numNat (pred n))
-
-minNat :: Nat -> Nat -> Nat
-minNat    Z     n  = Z
-minNat    m     Z  = Z
-minNat (S m) (S n) = S (minNat m n)
+natFunction = Unsafe.promote $ natConsume natProduce
 
 nats, partialNats :: [Nat]
 nats        = iterate S Z
 partialNats = iterate S undefined
-
-showSpooned :: Show a => Maybe a -> String
-showSpooned Nothing  = "_"
-showSpooned (Just a) = show a
 
 continuity :: (Nat -> Nat) -> Int
 continuity f =
@@ -98,7 +101,7 @@ prettyRandomNatFunction = do
   putStrLn $ "---------+----------"
   forM_ inputs $ \input ->
     putStrLn $ "    "
-            ++ show (natNum input)
-            ++ replicate (5 - (length $ show $ natNum input)) ' ' ++ "|    "
-            ++ show (natNum $ f input)
+            ++ show input
+            ++ replicate (5 - (length $ show input)) ' ' ++ "|    "
+            ++ show (f input)
   putStrLn "    ⋮    |    ⋮\n"
