@@ -132,6 +132,10 @@ continuity f =
   genericLength . takeWhile isNothing $
     map (spoon . f) partialNats
 
+undefinedAt :: Integer -> Nat
+undefinedAt 0 = undefined
+undefinedAt n = S (undefinedAt (pred n))
+
 prettyNatFunction :: (Nat -> Nat) -> IO ()
 prettyNatFunction f = do
   let inputs = genericTake (c + 1) nats
