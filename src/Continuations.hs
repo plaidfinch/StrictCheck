@@ -106,18 +106,18 @@ natDemands f =
 -- must produce exactly one constructor of output
 natProduce :: Gen Nat -> Gen Nat
 natProduce gen =
-  frequency [ (1,) $ return Z
-            , (2,) $ S <$> gen
+  frequency [ (1,) $ variant 1 $ return Z
+            , (2,) $ variant 2 $ S <$> gen
             ]
 
 -- must consume either zero or one constructors of input
 natConsume :: (Gen Nat -> Gen Nat) -> Nat -> Gen Nat
 natConsume produce nat =
-  frequency [ (1,) $ produce (natConsume produce nat)
-            , (1,) $
+  frequency [ (1,) $ variant 1 $ produce (natConsume produce nat)
+            , (1,) $ variant 2 $
                 case nat of
-                  Z      -> fix produce
-                  S nat' -> produce (natConsume produce nat')
+                  Z      -> variant 3 $ fix produce
+                  S nat' -> variant 4 $ produce (natConsume produce nat')
             ]
 
 natFunction :: Gen (Nat -> Nat)
