@@ -103,10 +103,10 @@ natDemands f =
     flip map [0..f (numNat input) + 1] $ \demand ->
       natFunctionDemand (nStrict (natNum demand)) f (numNat input)
 
--- must produce exactly one constructor of output
 natProduce :: Gen Nat -> Gen Nat
 natProduce gen =
-  frequency [ (1,) $ variant 1 $ return Z
+  frequency [ (2,) $ variant 0 $ gen
+            , (1,) $ variant 1 $ return Z
             , (2,) $ variant 2 $ S <$> gen
             ]
 
@@ -143,16 +143,8 @@ prettyNatFunction f = do
       demands = natDemands f
       demandBehaviors =
         flip map demands $ \list ->
-          map ((0 ==) . uncurry (-)) $
+          map (uncurry subtract) $
             zip list (tail list)
-      showBehavior n bs acc =
-        case bs of
-          [] -> reverse acc
-          (b : bs') ->
-            if b then showBehavior n bs' (" ~" ++ acc)
-            else case n of
-              Z   -> showBehavior n bs' (" Z" ++ acc)
-              S n' -> showBehavior n' bs' (" S" ++ acc)
 
   putStrLn $ "\n  Input  |  Output  |  Demand Behavior"
   putStrLn $ "---------+----------+-------------------"
@@ -162,7 +154,7 @@ prettyNatFunction f = do
             ++ replicate (5 - (length $ show input)) ' ' ++ "|    "
             ++ show (f input)
             ++ replicate (6 - (length $ show (f input))) ' ' ++ "|  "
-            ++ showBehavior input behavior ""
+            ++ intercalate " " (map (\n -> if n == 0 then "~" else show n) behavior)
   putStrLn $ "    ⋮    |    ⋮     |  "
           ++ intercalate " " (replicate (length (last demandBehaviors)) "⋮") ++ "\n"
 
