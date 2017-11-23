@@ -150,8 +150,6 @@ prettyNatFunction f = do
               Z   -> showBehavior n bs' (" Z" ++ acc)
               S n' -> showBehavior n' bs' (" S" ++ acc)
 
-  print demands
-  print demandBehaviors
   putStrLn $ "\n  Continuity: " ++ show c ++ "\n"
   putStrLn $ "  Input  |  Output  |  Demand Behavior"
   putStrLn $ "---------+----------+-------------------"
@@ -164,3 +162,9 @@ prettyNatFunction f = do
             ++ showBehavior input behavior ""
   putStrLn $ "    ⋮    |    ⋮     |  "
           ++ intercalate " " (replicate (length (last demandBehaviors)) "⋮") ++ "\n"
+
+prettyRandomNatFunction :: IO (Nat -> Nat)
+prettyRandomNatFunction = do
+  f <- generate natFunction
+  prettyNatFunction f
+  return f
