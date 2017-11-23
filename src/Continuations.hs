@@ -167,6 +167,13 @@ prettyNatFunction f = do
   putStrLn $ "    ⋮    |    ⋮     |  "
           ++ intercalate " " (replicate (length (last demandBehaviors)) "⋮") ++ "\n"
 
+natFunctionAboveContinuity :: Integer -> Gen (Nat -> Nat)
+natFunctionAboveContinuity n = do
+  f <- natFunction
+  if continuity f >= n
+    then return f
+    else natFunctionAboveContinuity n
+
 prettyRandomNatFunction :: IO (Nat -> Nat)
 prettyRandomNatFunction = do
   f <- generate natFunction
