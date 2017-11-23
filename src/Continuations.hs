@@ -16,6 +16,11 @@ import Data.Foldable
 import Data.Maybe
 import Control.DeepSeq
 import GHC.Generics
+import Data.IORef
+import System.IO.Unsafe as Unsafe
+import Data.Bool
+
+import Observe
 
 -- Playing around with continuations
 
@@ -40,7 +45,7 @@ m2 k i = do
 -- Experiments in generating random functions over nats --
 ----------------------------------------------------------
 
-data Nat = Z | S Nat deriving (Eq, Generic, NFData)
+data Nat = Z | S Nat deriving (Eq, Ord, Generic, NFData)
 
 natNum :: Nat -> Integer
 natNum Z = 0
@@ -62,21 +67,57 @@ instance Num Nat where
 instance Show Nat where
   show = show . natNum
 
+instance Enum Nat where
+  fromEnum n = fromInteger $ natNum n
+  toEnum i = numNat (toInteger i)
+
+{-# NOINLINE instrumentNat #-}
+instrumentNat :: IORef Integer -> Nat -> Nat
+instrumentNat count n =
+  unsafePerformIO $
+    case n of
+      Z    -> modifyIORef' count succ >> return Z
+      S n' -> modifyIORef' count succ >> return (S $ instrumentNat count n')
+
+{-# NOINLINE natFunctionDemand #-}
+natFunctionDemand :: (Nat -> ()) -> (Nat -> Nat) -> Nat -> Integer
+natFunctionDemand c f input =
+  unsafePerformIO $ do
+    count <- newIORef 0
+    let result = f $ instrumentNat count input
+    evaluate (c result)
+    forced <- readIORef count
+    return forced
+
+nStrict :: Integer -> Nat -> ()
+nStrict 0 _ = ()
+nStrict i n =
+  case n of
+    Z -> ()
+    S n' -> nStrict (pred i) n'
+
+natDemands :: (Nat -> Nat) -> [[Integer]]
+natDemands f =
+  let c = continuity f in
+  flip map [0..c] $ \input ->
+    flip map [0..f (numNat input) + 1] $ \demand ->
+      natFunctionDemand (nStrict (natNum demand)) f (numNat input)
+
 -- must produce exactly one constructor of output
 natProduce :: Gen Nat -> Gen Nat
 natProduce gen =
-  frequency [ (1,) $ variant 1 $ return Z
-            , (3,) $ variant 2 $ S <$> gen
+  frequency [ (1,) $ return Z
+            , (2,) $ S <$> gen
             ]
 
 -- must consume either zero or one constructors of input
 natConsume :: (Gen Nat -> Gen Nat) -> Nat -> Gen Nat
 natConsume produce nat =
-  frequency [ (1,) $ variant 0 $ produce (natConsume produce nat)
-            , (2,) $
+  frequency [ (1,) $ produce (natConsume produce nat)
+            , (1,) $
                 case nat of
-                  Z      -> variant 1 $ fix produce
-                  S nat' -> variant 2 $ produce (natConsume produce nat')
+                  Z      -> fix produce
+                  S nat' -> produce (natConsume produce nat')
             ]
 
 natFunction :: Gen (Nat -> Nat)
@@ -91,17 +132,35 @@ continuity f =
   genericLength . takeWhile isNothing $
     map (spoon . f) partialNats
 
-prettyRandomNatFunction :: IO ()
-prettyRandomNatFunction = do
-  f <- generate natFunction
+prettyNatFunction :: (Nat -> Nat) -> IO ()
+prettyNatFunction f = do
   let inputs = genericTake (c + 1) nats
       c      = continuity f
-  putStrLn $ "\n   Continuity: " ++ show c ++ "\n"
-  putStrLn $ "  Input  |  Output"
-  putStrLn $ "---------+----------"
-  forM_ inputs $ \input ->
-    putStrLn $ (if natNum input < c then "    " else " ~  ")
+      demands = natDemands f
+      demandBehaviors =
+        flip map demands $ \list ->
+          map ((0 ==) . uncurry (-)) $
+            zip list (tail list)
+      showBehavior n bs acc =
+        case bs of
+          [] -> reverse acc
+          (b : bs') ->
+            if b then showBehavior n bs' (" ~" ++ acc)
+            else case n of
+              Z   -> showBehavior n bs' (" Z" ++ acc)
+              S n' -> showBehavior n' bs' (" S" ++ acc)
+
+  print demands
+  print demandBehaviors
+  putStrLn $ "\n  Continuity: " ++ show c ++ "\n"
+  putStrLn $ "  Input  |  Output  |  Demand Behavior"
+  putStrLn $ "---------+----------+-------------------"
+  forM_ (zip inputs demandBehaviors) $ \(input, behavior) ->
+    putStrLn $ "    "
             ++ show input
             ++ replicate (5 - (length $ show input)) ' ' ++ "|    "
             ++ show (f input)
-  putStrLn "    ⋮    |    ⋮\n"
+            ++ replicate (6 - (length $ show (f input))) ' ' ++ "|  "
+            ++ showBehavior input behavior ""
+  putStrLn $ "    ⋮    |    ⋮     |  "
+          ++ intercalate " " (replicate (length (last demandBehaviors)) "⋮") ++ "\n"
