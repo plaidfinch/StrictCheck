@@ -154,8 +154,7 @@ prettyNatFunction f = do
               Z   -> showBehavior n bs' (" Z" ++ acc)
               S n' -> showBehavior n' bs' (" S" ++ acc)
 
-  putStrLn $ "\n  Continuity: " ++ show c ++ "\n"
-  putStrLn $ "  Input  |  Output  |  Demand Behavior"
+  putStrLn $ "\n  Input  |  Output  |  Demand Behavior"
   putStrLn $ "---------+----------+-------------------"
   forM_ (zip inputs demandBehaviors) $ \(input, behavior) ->
     putStrLn $ "    "
