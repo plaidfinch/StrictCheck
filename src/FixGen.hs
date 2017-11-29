@@ -125,10 +125,8 @@ instance Consume Integer where
   consume = consumeAtomic
 
 instance (Produce a, Produce b) => Produce (a, b) where
-  produce k = do
-    x <- recur k
-    y <- recur k
-    return (x, y)
+  produce k =
+    (,) <$> recur k <*> recur k
 
 instance (Consume a, Consume b) => Consume (a, b) where
   consume (x, y) =
@@ -148,9 +146,8 @@ instance Consume Nat where
 instance (Produce a) => Produce [a] where
   produce k = do
     frequency [ (1, return [])
-              , (4,) $ do
-                  x <- recur k
-                  (x :) <$> recur k
+              , (4, (:) <$> recur k
+                        <*> recur k)
               ]
 
 instance (Consume a) => Consume [a] where
