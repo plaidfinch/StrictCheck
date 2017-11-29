@@ -49,35 +49,20 @@ class Produce b where
 -- infinitely nested generators, which represent a particular arbitrary
 -- destruction of the input closed overy by the Cases
 variants :: Cases -> Variants
-variants original@(Cases cs) = cs & \case
-  Nothing  -> idVariants
+variants (Cases cs) = cs & \case
+  Nothing  -> fix delay
   Just urn ->
     Variants $ do
       (_, (v, Cases inner), outer) <- Urn.remove urn
-      fmap (v,) . stutter $
-        case (inner, outer) of
-          (Nothing, Nothing)          -> idVariants
-          (Nothing, Just outside)     -> variants (Cases (Just outside))
-          (Just inside, Nothing)      -> variants (Cases (Just inside))
-          (Just inside, Just outside) ->
-            variants . Cases . Just $
-              addToUrn outside (contents inside)
+      return $ (v,) $ variants $ Cases $ merge inner outer
   where
-    idVariants :: Variants
-    idVariants = fix $ \rest ->
-      Variants $ return (Variant (variant 0), rest)
-
-    stutter :: Variants -> Gen Variants
-    stutter r =
-      frequency [ (2, return $ variants original)
-                , (4, stutter r)
-                , (2, return $ twice r) ]
-
-    twice :: Variants -> Variants
-    twice r = Variants $ do
-      (v, rest) <- pull r
-      (v', rest') <- pull rest
-      return (Variant (vary v' . vary v), rest')
+    merge :: Maybe (Urn a) -> Maybe (Urn a) -> Maybe (Urn a)
+    merge left right =
+      case (left, right) of
+        (Nothing, Nothing) -> Nothing
+        (Nothing, Just r)  -> Just r
+        (Just l, Nothing)  -> Just l
+        (Just l, Just r)   -> Just $ addToUrn l (contents r)
 
     contents :: Urn a -> [(Weight, a)]
     contents urn =
@@ -86,18 +71,37 @@ variants original@(Cases cs) = cs & \case
         (weight, a, _, Nothing)   -> [(weight, a)]
 
 -- Make a recursive produce generator that threads through
-recur :: Produce a => Variants -> Gen a
-recur vs = do
-  (v, rest) <- pull vs
-  vary v (produce (recur rest))
+interleave :: Produce a => Variants -> Gen a
+interleave vs = do
+  (v, vs') <- pull =<< stutter vs
+  vary v (produce (interleave vs'))
+
+stutter :: Variants -> Gen Variants
+stutter vs = do
+  frequency [ (3, return $ delay vs)
+            , (2, repeatedly more vs) ]
+
+repeatedly :: (a -> a) -> a -> Gen a
+repeatedly f a =
+  frequency [ (1, return a)
+            , (1, f <$> repeatedly f a) ]
+
+delay :: Variants -> Variants
+delay vs = Variants $
+  return (Variant (variant 0), vs)
+
+more :: Variants -> Variants
+more vs = Variants $ do
+  (v, vs') <- pull vs
+  (v', vs'') <- pull vs'
+  return (Variant (vary v' . vary v), vs'')
 
 
 -- A generator for a partially lazy function
 -- TODO: Make this respect the size parameter (should limit both size of
 -- produced values and maximum continuity of function)
 lazyFunction :: (Consume a, Produce b) => Gen (a -> b)
-lazyFunction =
-  promote (consume >>> variants >>> recur)
+lazyFunction = promote (consume >>> variants >>> interleave)
 
 
 -- Helpers for writing Consume and Produce instances...
@@ -115,7 +119,8 @@ produceAtomic _ = arbitrary
 -- Always use this to destruct the fields of a product. It makes sure that you
 -- get unique variants embedded in the Cases... and there is absolutely no
 -- reason not to use it.
-fields :: [(Integer, Cases)] -> Cases
+fields :: [(Word, Cases)] -> Cases
 fields =
-  Cases . Urn.fromList . map (1,) .
-  map (\(i, cs) -> (Variant (variant i), cs))
+  Cases . Urn.fromList .
+    zipWith (\v (weight, cases) ->
+               (weight, (Variant (variant v), cases))) [1..]
