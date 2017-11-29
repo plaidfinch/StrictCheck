@@ -4,7 +4,14 @@
 
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
-module FixGen where
+module FixGen ( Cases
+              , Consume(..)
+              , Produce(..)
+              , lazyFunction
+              , consumeAtomic
+              , produceAtomic
+              , fields
+              ) where
 
 import Test.QuickCheck
 import Test.QuickCheck.Gen.Unsafe (promote)
@@ -13,13 +20,11 @@ import Data.Urn.Internal as Urn (uninsert)
 import Data.Function
 import Control.Category ((>>>))
 
-import Continuations
-
 -- A tree representing all possible destruction sequences for a value
 -- If constructed lazily, unfolding the contained urns forces a particular
 -- random control path destructing the datatype
 newtype Cases =
-  Cases { cases :: Maybe (Urn (Variant, Cases)) }
+  Cases (Maybe (Urn (Variant, Cases)))
 
 -- A variant which can be applied to any generator--kept in a newtype to get
 -- around lack of impredicativity
@@ -82,8 +87,8 @@ variants original@(Cases cs) = cs & \case
 
 -- Make a recursive produce generator that threads through
 recur :: Produce a => Variants -> Gen a
-recur k = do
-  (v, rest) <- pull k
+recur vs = do
+  (v, rest) <- pull vs
   vary v (produce (recur rest))
 
 -- A generator for a partially lazy function
@@ -111,45 +116,3 @@ fields :: [(Integer, Cases)] -> Cases
 fields =
   Cases . Urn.fromList . map (1,) .
   map (\(i, cs) -> (Variant (variant i), cs))
-
-
--- Some instances!
-
-instance Produce Integer where
-  produce = produceAtomic
-
-instance Consume Integer where
-  consume = consumeAtomic
-
-instance (Produce a, Produce b) => Produce (a, b) where
-  produce field =
-    (,) <$> field <*> field
-
-instance (Consume a, Consume b) => Consume (a, b) where
-  consume (x, y) =
-    fields [ (1, consume x)
-           , (1, consume y) ]
-
-instance Produce Nat where
-  produce field = do
-    frequency [ (1, return Z)
-              , (2, S <$> field)
-              ]
-
-instance Consume Nat where
-  consume Z     = fields []
-  consume (S n) = fields [ (1, consume n) ]
-
-instance (Produce a) => Produce [a] where
-  produce field = do
-    frequency [ (1, return [])
-              , (4, (:) <$> field
-                        <*> field)
-              ]
-
-instance (Consume a) => Consume [a] where
-  consume = \case
-    []       -> fields []
-    (x : xs) -> fields [ (1, consume x)
-                       , (1, consume xs)
-                       ]
