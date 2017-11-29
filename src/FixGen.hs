@@ -38,7 +38,7 @@ class Consume a where
 -- Produces an arbitrary construction, but using a Variants to drive the
 -- implicit destruction of the input
 class Produce b where
-  produce :: Variants -> Gen b
+  produce :: (forall a. Produce a => Gen a) -> Gen b
 
 -- This converts a tree of all possible case matches into a concrete series of
 -- infinitely nested generators, which represent a particular arbitrary
@@ -80,10 +80,16 @@ variants original@(Cases cs) = cs & \case
         (weight, a, _, Just urn') -> (weight, a) : contents urn'
         (weight, a, _, Nothing)   -> [(weight, a)]
 
+-- Make a recursive produce generator that threads through
+recur :: Produce a => Variants -> Gen a
+recur k = do
+  (v, rest) <- pull k
+  vary v (produce (recur rest))
+
 -- A generator for a partially lazy function
 lazyFunction :: (Consume a, Produce b) => Gen (a -> b)
 lazyFunction =
-  promote (consume >>> variants >>> produce)
+  promote (consume >>> variants >>> recur)
 
 
 -- Helpers for writing Consume and Produce instances...
@@ -95,7 +101,7 @@ consumeAtomic !_ = fields []
 
 -- If something is opaque and all we know is how to generate an arbitrary one,
 -- we can fall back on its Arbitrary instance
-produceAtomic :: Arbitrary b => Variants -> Gen b
+produceAtomic :: Arbitrary b => (forall a. Produce a => Gen a) -> Gen b
 produceAtomic _ = arbitrary
 
 -- Always use this to destruct the fields of a product. It makes sure that you
@@ -105,15 +111,6 @@ fields :: [(Integer, Cases)] -> Cases
 fields =
   Cases . Urn.fromList . map (1,) .
   map (\(i, cs) -> (Variant (variant i), cs))
-
--- Always use this (on the passed "continuation") to construct the fields of a
--- product. It makes sure that each time you produce some output, you have the
--- possibility of consuming more input, as well as guaranteeing that the entropy
--- from the input can be used to randomize the output.
-recur :: Produce a => Variants -> Gen a
-recur k = do
-  (v, rest) <- pull k
-  vary v (produce rest)
 
 
 -- Some instances!
@@ -125,8 +122,8 @@ instance Consume Integer where
   consume = consumeAtomic
 
 instance (Produce a, Produce b) => Produce (a, b) where
-  produce k =
-    (,) <$> recur k <*> recur k
+  produce field =
+    (,) <$> field <*> field
 
 instance (Consume a, Consume b) => Consume (a, b) where
   consume (x, y) =
@@ -134,9 +131,9 @@ instance (Consume a, Consume b) => Consume (a, b) where
            , (1, consume y) ]
 
 instance Produce Nat where
-  produce k = do
+  produce field = do
     frequency [ (1, return Z)
-              , (2, S <$> recur k)
+              , (2, S <$> field)
               ]
 
 instance Consume Nat where
@@ -144,10 +141,10 @@ instance Consume Nat where
   consume (S n) = fields [ (1, consume n) ]
 
 instance (Produce a) => Produce [a] where
-  produce k = do
+  produce field = do
     frequency [ (1, return [])
-              , (4, (:) <$> recur k
-                        <*> recur k)
+              , (4, (:) <$> field
+                        <*> field)
               ]
 
 instance (Consume a) => Consume [a] where
