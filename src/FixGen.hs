@@ -91,7 +91,10 @@ recur vs = do
   (v, rest) <- pull vs
   vary v (produce (recur rest))
 
+
 -- A generator for a partially lazy function
+-- TODO: Make this respect the size parameter (should limit both size of
+-- produced values and maximum continuity of function)
 lazyFunction :: (Consume a, Produce b) => Gen (a -> b)
 lazyFunction =
   promote (consume >>> variants >>> recur)
