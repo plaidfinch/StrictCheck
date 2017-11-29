@@ -22,8 +22,12 @@ library
                        contravariant >= 1.4,
                        mtl >= 2.2.1,
                        transformers >= 0.5,
-                       QuickCheck
-  exposed-modules:     Variadic, Observe, LazyCoArbitrary, Continuations
+                       QuickCheck,
+                       data-fix,
+                       urn-random >= 0.1.0.0,
+                       extra >= 1.6,
+                       monad-loops >= 0.4.3
+  exposed-modules:     Variadic, Observe, LazyCoArbitrary, Continuations, FixGen
 -- Do something about type defaults?
   ghc-options:         -Wall
 

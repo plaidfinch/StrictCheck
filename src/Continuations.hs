@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
 {-# LANGUAGE TypeApplications, TupleSections, DeriveAnyClass, DeriveGeneric #-}
 
@@ -11,14 +12,11 @@ import qualified Test.QuickCheck.Gen.Unsafe as Unsafe
 import Data.Function
 import Control.Spoon
 import Data.List
-import Control.Applicative
-import Data.Foldable
 import Data.Maybe
 import Control.DeepSeq
 import GHC.Generics
 import Data.IORef
 import System.IO.Unsafe as Unsafe
-import Data.Bool
 
 import Observe
 
@@ -47,6 +45,10 @@ m2 k i = do
 
 data Nat = Z | S Nat deriving (Eq, Ord, Generic, NFData)
 
+instance Arbitrary Nat where
+  arbitrary = frequency [ (1,) $ return Z
+                        , (2,) $ S <$> arbitrary ]
+
 natNum :: Nat -> Integer
 natNum Z = 0
 natNum (S n) = succ (natNum n)
@@ -62,7 +64,7 @@ instance Num Nat where
   a * b = numNat $ natNum a * natNum b
   abs = id
   signum 0 = 0
-  signum n = 1
+  signum _ = 1
 
 instance Show Nat where
   show = show . natNum
@@ -136,6 +138,7 @@ undefinedAt :: Integer -> Nat
 undefinedAt 0 = undefined
 undefinedAt n = S (undefinedAt (pred n))
 
+-- TODO: This is absurdly inefficient in very easy-to-fix ways.
 prettyNatFunction :: (Nat -> Nat) -> IO ()
 prettyNatFunction f = do
   let inputs = genericTake (c + 1) nats
@@ -170,3 +173,21 @@ prettyRandomNatFunction = do
   f <- generate natFunction
   prettyNatFunction f
   return f
+
+halve :: Nat -> Nat
+halve Z         = Z
+halve (S Z)     = Z
+halve (S (S n)) = S (halve n)
+
+double :: Nat -> Nat
+double Z     = Z
+double (S n) = S (S (double n))
+
+isEven :: Nat -> Bool
+isEven n | n == double (halve n) = True
+         | otherwise             = False
+
+minNat :: Nat -> Nat -> Nat
+minNat    Z     _  = Z
+minNat    _     Z  = Z
+minNat (S m) (S n) = S (minNat m n)

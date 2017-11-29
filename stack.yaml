@@ -9,25 +9,22 @@
 # to be used for project dependencies. For example:
 #
 # resolver: lts-3.5
-# resolver: nightly-2015-09-21
+resolver: nightly-2017-11-24
 # resolver: ghc-7.10.2
 # resolver: ghcjs-0.1.0_ghc-7.10.2
 # resolver:
 #  name: custom-snapshot
 #  location: "./custom-snapshot.yaml"
-resolver: lts-9.12
+# resolver: lts-9.12
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
 #
-# packages:
-# - some-directory
 # - https://example.com/foo/bar/baz-0.0.2.tar.gz
 # - location:
 #    git: https://github.com/commercialhaskell/stack.git
-#    commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
+#    commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a:
 # - location: https://github.com/commercialhaskell/stack/commit/e7b331f14bcffb8367cd58fbfc8b40ec7642100a
-#   extra-dep: true
 #  subdirs:
 #  - auto-update
 #  - wai
@@ -37,9 +34,13 @@ resolver: lts-9.12
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - .
+- location:
+   git: https://github.com/antalsz/urn-random.git
+   commit: d62f1bfe89cecbe6346e9710f2db07a3fbe2a932
+  extra-dep: true
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps: [ spoon-0.3.1 ]
+extra-deps: [ spoon-0.3.1, urn-random-0.1.0.0 ]
 
 # Override default flag values for local packages and extra-deps
 flags: {}
