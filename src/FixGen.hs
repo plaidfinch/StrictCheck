@@ -64,7 +64,7 @@ variants original@(Cases cs) = cs & \case
 
     stutter :: Variants -> Gen Variants
     stutter r =
-      frequency [ (1, return $ variants original)
+      frequency [ (2, return $ variants original)
                 , (2, return r)
                 , (3, return $ twice r) ]
 
