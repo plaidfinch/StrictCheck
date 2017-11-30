@@ -78,12 +78,12 @@ interleave vs = do
 
 stutter :: Variants -> Gen Variants
 stutter vs = do
-  frequency [ (3, return $ delay vs)
+  frequency [ (2, return $ delay vs)
             , (2, repeatedly more vs) ]
 
 repeatedly :: (a -> a) -> a -> Gen a
 repeatedly f a =
-  frequency [ (1, return a)
+  frequency [ (2, return a)
             , (1, f <$> repeatedly f a) ]
 
 delay :: Variants -> Variants
