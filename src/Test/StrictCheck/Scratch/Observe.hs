@@ -5,7 +5,7 @@
 -- Observing the strictness of Haskell functions from within Haskell! --
 ------------------------------------------------------------------------
 
-module Observe where
+module Test.StrictCheck.Scratch.Observe where
 
 import System.IO.Unsafe
 import Control.Spoon

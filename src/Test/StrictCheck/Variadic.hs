@@ -1,6 +1,8 @@
-{-# language TypeFamilyDependencies, GADTs, TypeInType, TypeOperators, TypeApplications, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, AllowAmbiguousTypes, ScopedTypeVariables, UndecidableInstances #-}
+{-# language TypeFamilyDependencies, GADTs, TypeInType, TypeOperators,
+  TypeApplications, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts,
+  AllowAmbiguousTypes, ScopedTypeVariables, UndecidableInstances #-}
 
-module Variadic where
+module Test.StrictCheck.Variadic where
 
 import Data.Kind
 

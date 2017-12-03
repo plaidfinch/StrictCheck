@@ -2,11 +2,9 @@
 
 {-# LANGUAGE TypeApplications, TupleSections, DeriveAnyClass, DeriveGeneric #-}
 
-module Continuations where
+module Test.StrictCheck.Scratch.Nats where
 
 import Control.Monad
-import Control.Monad.Trans
-import Control.Monad.Trans.Cont
 import Test.QuickCheck
 import qualified Test.QuickCheck.Gen.Unsafe as Unsafe
 import Data.Function
@@ -18,27 +16,9 @@ import GHC.Generics
 import Data.IORef
 import System.IO.Unsafe as Unsafe
 
-import Observe
-import Generate
+import Test.StrictCheck.Generate
 
--- Playing around with continuations
-
-m1, m2 :: (Integer -> ContT r IO Integer) -> Integer -> ContT r IO Integer
-
-m1 _ 0 = return 0
-m1 k i = do
-  liftIO . putStrLn $ "i = " ++ show i
-  j <- k (i - 1)
-  liftIO . putStrLn $ show (i + j) ++ " = " ++ show i ++ " + " ++ show j
-  return (i + j)
-
-m2 _ 0 = return 1
-m2 k i = do
-  liftIO . putStrLn $ "i = " ++ show i
-  j <- k (i - 1)
-  liftIO . putStrLn $ show (i * j) ++ " = " ++ show i ++ " * " ++ show j
-  return (i * j)
-
+import Test.StrictCheck.Scratch.Observe
 
 ----------------------------------------------------------
 -- Experiments in generating random functions over nats --

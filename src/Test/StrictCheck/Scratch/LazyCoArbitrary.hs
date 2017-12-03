@@ -2,7 +2,7 @@
 
 {-# OPTIONS_GHC -fno-warn-unused-imports -fno-warn-type-defaults #-}
 
-module LazyCoArbitrary where
+module Test.StrictCheck.Scratch.LazyCoArbitrary where
 
 import GHC.Generics
 import Test.QuickCheck

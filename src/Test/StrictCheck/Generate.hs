@@ -1,16 +1,17 @@
 {-# language BangPatterns, TupleSections, RankNTypes #-}
 
-module Generate ( Input
-                , Inputs
-                , Consume(..)
-                , Produce(..)
-                , fields
-                , recur
-                , consumeWHNF
-                , produceArbitrary
-                , Lazy(..)
-                , lazy
-                ) where
+module Test.StrictCheck.Generate
+  ( Input
+  , Inputs
+  , Consume(..)
+  , Produce(..)
+  , fields
+  , recur
+  , consumeWHNF
+  , produceArbitrary
+  , Lazy(..)
+  , lazy
+  ) where
 
 import Test.QuickCheck
 import Test.QuickCheck.Gen.Unsafe ( promote )

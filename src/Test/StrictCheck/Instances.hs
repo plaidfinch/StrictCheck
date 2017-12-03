@@ -1,9 +1,9 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Instances where
+module Test.StrictCheck.Instances where
 
-import Generate
+import Test.StrictCheck.Generate
 import Test.QuickCheck
 
 import Data.Tree
