@@ -38,10 +38,6 @@ newtype Input =
 -- triggering the partial evaluation of the original input to the function.
 newtype Inputs = Inputs [Input]
 
-instance Monoid Inputs where
-  Inputs vs `mappend` Inputs ws = Inputs $ vs ++ ws
-  mempty = Inputs []
-
 
 ----------------------------------------------------------
 -- The two user-facing typeclasses: Consume and Produce --
@@ -174,4 +170,4 @@ instance Produce a => Arbitrary (Lazy a) where
 
 -- | A universal generator for all that can be produced (including functions).
 lazy :: Produce a => Gen a
-lazy = produce mempty
+lazy = produce (Inputs [])
