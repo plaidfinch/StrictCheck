@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-type-defaults #-}
+{-# OPTIONS_GHC -fno-warn-type-defaults -fno-warn-name-shadowing #-}
 
 {-# LANGUAGE TypeApplications, TupleSections, DeriveAnyClass, DeriveGeneric #-}
 
@@ -19,6 +19,7 @@ import Data.IORef
 import System.IO.Unsafe as Unsafe
 
 import Observe
+import Generate
 
 -- Playing around with continuations
 
@@ -191,3 +192,14 @@ minNat :: Nat -> Nat -> Nat
 minNat    Z     _  = Z
 minNat    _     Z  = Z
 minNat (S m) (S n) = S (minNat m n)
+
+-- Using Generate.hs
+instance Produce Nat where
+  produce inputs = do
+    frequency [ (1, return Z)
+              , (2, S <$> recur inputs)
+              ]
+
+instance Consume Nat where
+  consume Z     = fields []
+  consume (S n) = fields [ (1, consume n) ]
