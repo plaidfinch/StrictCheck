@@ -180,6 +180,4 @@ instance Produce Nat where
               , (2, S <$> recur inputs)
               ]
 
-instance Consume Nat where
-  consume Z     = fields []
-  consume (S n) = fields [ consume n ]
+instance Consume Nat

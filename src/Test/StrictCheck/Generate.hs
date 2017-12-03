@@ -1,4 +1,5 @@
-{-# language BangPatterns, TupleSections, RankNTypes #-}
+{-# language BangPatterns, TupleSections, RankNTypes, TypeOperators, GADTs,
+  FlexibleContexts, DefaultSignatures #-}
 
 module Test.StrictCheck.Generate
   ( Input
@@ -7,6 +8,7 @@ module Test.StrictCheck.Generate
   , Produce(..)
   , fields
   , recur
+  , consumeVarying
   , consumeWHNF
   , produceArbitrary
   , Lazy(..)
@@ -21,6 +23,7 @@ import qualified Data.Urn          as Urn
 import qualified Data.Urn.Internal as Urn ( uninsert )
 
 import Data.Monoid
+import GHC.Generics
 
 
 --------------------------------------------------
@@ -46,6 +49,8 @@ newtype Inputs = Inputs [Input]
 -- | Generate a tree of all possible ways to destruct the input value.
 class Consume a where
   consume :: a -> Input
+  default consume :: (Generic a, GFields (Rep a)) => a -> Input
+  consume x = fields (gFields (from x))
 
 -- | Produce an arbitrary construction, but using Inputs to drive the
 -- implicit destruction of the original input value.
@@ -80,6 +85,14 @@ fields =
 consumeWHNF :: a -> Input
 consumeWHNF !_ = fields []
 
+-- | If a non-algebraic input contains entropy needed to randomize output, use
+-- some function to capture this entropy. In most cases, this will be a thinly
+-- wrapped call to variant.
+consumeVarying :: (forall b. a -> Gen b -> Gen b) -> a -> Input
+consumeVarying varyA !a =
+  Input . Just . Urn.singleton 1 $
+    (Variant (varyA a), Input Nothing)
+
 -- | If something is opaque and all we know is how to generate an arbitrary one,
 -- we can fall back on its Arbitrary instance.
 produceArbitrary :: Arbitrary b => Inputs -> Gen b
@@ -92,7 +105,6 @@ produceArbitrary _ = arbitrary
 
 -- | A variant which can be applied to any generator--kept in a newtype to get
 -- around lack of impredicativity.
-
 newtype Variant =
   Variant { vary :: forall a. Gen a -> Gen a }
 
@@ -171,3 +183,30 @@ instance Produce a => Arbitrary (Lazy a) where
 -- | A universal generator for all that can be produced (including functions).
 lazy :: Produce a => Gen a
 lazy = produce (Inputs [])
+
+
+--------------------------------------------
+-- Deriving Consume instances generically --
+--------------------------------------------
+
+class GFields f where
+  gFields :: f p -> [Input]
+
+instance GFields V1 where
+  gFields _ = []
+
+instance GFields U1 where
+  gFields !U1 = []
+
+instance (GFields f, GFields g) => GFields (f :+: g) where
+  gFields (L1 x) = gFields x
+  gFields (R1 x) = gFields x
+
+instance (GFields f, GFields g) => GFields (f :*: g) where
+  gFields (x :*: y) = gFields x ++ gFields y
+
+instance (GFields f) => GFields (M1 i t f) where
+  gFields (M1 x) = gFields x
+
+instance (Consume c) => GFields (K1 i c) where
+  gFields (K1 x) = [consume x]
