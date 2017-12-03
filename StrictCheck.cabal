@@ -27,7 +27,7 @@ library
                        urn-random >= 0.1.0.0,
                        extra >= 1.6,
                        monad-loops >= 0.4.3
-  exposed-modules:     Variadic, Observe, LazyCoArbitrary, Continuations, FixGen, Instances
+  exposed-modules:     Variadic, Observe, LazyCoArbitrary, Continuations, Generate, Instances
 -- Do something about type defaults?
   ghc-options:         -Wall
 

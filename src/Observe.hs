@@ -34,8 +34,8 @@ import Data.Void
 
 newtype Context a = Context (a -> ())
 
-lazy :: Context [a]
-lazy = Context $ const ()
+fullyLazy :: Context [a]
+fullyLazy = Context $ const ()
 
 whnf :: Context [a]
 whnf = Context $ flip seq ()
