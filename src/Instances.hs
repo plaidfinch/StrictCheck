@@ -20,8 +20,7 @@ instance (Produce a, Produce b) => Produce (a, b) where
 
 instance (Consume a, Consume b) => Consume (a, b) where
   consume (x, y) =
-    fields [ (1, consume x)
-           , (1, consume y) ]
+    fields [ consume x, consume y ]
 
 instance (Produce a) => Produce [a] where
   produce inputs = do
@@ -32,13 +31,10 @@ instance (Produce a) => Produce [a] where
 
 instance (Consume a) => Consume [a] where
   consume []       = fields []
-  consume (x : xs) = fields [ (1, consume x)
-                            , (1, consume xs)
-                            ]
+  consume (x : xs) = fields [ consume x, consume xs ]
 
 instance (Consume a) => Consume (Tree a) where
-  consume (Node r cs) = fields [ (1, consume r)
-                               , (1, consume cs) ]
+  consume (Node r cs) = fields [ consume r, consume cs ]
 
 instance (Produce a) => Produce (Tree a) where
   produce input =

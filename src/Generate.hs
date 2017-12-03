@@ -71,11 +71,11 @@ recur (Inputs is) = do
 -- | Reassemble pieces of input into a larger Input. The Words are weights which
 -- determine the relative probability of continuing to pattern match in that
 -- subpart of the input.
-fields :: [(Word, Input)] -> Input
+fields :: [Input] -> Input
 fields =
   Input . Urn.fromList .
-    zipWith (\v (weight, cases) ->
-               (weight, (Variant (variant v), cases)))
+    zipWith (\v input ->
+               (1, (Variant (variant v), input)))
             [(0 :: Int) ..]
 
 -- | If something is opaque and all we know is that it can be reduced to whnf,

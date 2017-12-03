@@ -202,4 +202,4 @@ instance Produce Nat where
 
 instance Consume Nat where
   consume Z     = fields []
-  consume (S n) = fields [ (1, consume n) ]
+  consume (S n) = fields [ consume n ]
