@@ -4,7 +4,7 @@
 
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
-module Generate ( Cases
+module Generate ( Input
                 , Inputs
                 , Consume(..)
                 , Produce(..)
@@ -13,8 +13,8 @@ module Generate ( Cases
                 , fields
                 , recur
                 , input
-                , consumeAtomic
-                , produceAtomic
+                , consumeWHNF
+                , produceArbitrary
                 ) where
 
 import Test.QuickCheck
@@ -28,8 +28,8 @@ import Control.Monad
 -- A tree representing all possible destruction sequences for a value
 -- If constructed lazily, unfolding the contained urns forces a particular
 -- random control path destructing the datatype
-newtype Cases =
-  Cases (Maybe (Urn (Variant, Cases)))
+newtype Input =
+  Input (Maybe (Urn (Variant, Input)))
 
 -- A variant which can be applied to any generator--kept in a newtype to get
 -- around lack of impredicativity
@@ -55,7 +55,7 @@ instance Monoid Inputs where
 
 -- Generates a tree of all possible ways to destruct the input
 class Consume a where
-  consume :: a -> Cases
+  consume :: a -> Input
 
 -- Produces an arbitrary construction, but using a Variants to drive the
 -- implicit destruction of the input
@@ -64,14 +64,14 @@ class Produce b where
 
 -- This converts a tree of all possible case matches into a concrete series of
 -- infinitely nested generators, which represent a particular arbitrary
--- destruction of the input closed overy by the Cases
-variants :: Cases -> Variants
-variants (Cases cs) = cs & \case
+-- destruction of the input closed overy by the Inputs
+variants :: Input -> Variants
+variants (Input cs) = cs & \case
   Nothing  -> identityVariants
   Just urn ->
     Variants $ do
-      (_, (v, Cases inner), outer) <- Urn.remove urn
-      return $ (v,) $ variants $ Cases $ merge inner outer
+      (_, (v, Input inner), outer) <- Urn.remove urn
+      return $ (v,) $ variants $ Input $ merge inner outer
   where
     merge :: Maybe (Urn a) -> Maybe (Urn a) -> Maybe (Urn a)
     merge left right =
@@ -94,7 +94,7 @@ identityVariants = fix $ \vs ->
 
 -- The user interface for writing Produce and Consume instances:
 
-input :: Cases -> Inputs
+input :: Input -> Inputs
 input cs = Inputs [variants cs]
 
 recur :: Produce a => Inputs -> Gen a
@@ -124,22 +124,22 @@ recur (Inputs vss) = do
 
 -- If something is opaque and all we know is that it can be reduced to whnf,
 -- this default consumer should be used
-consumeAtomic :: a -> Cases
-consumeAtomic !_ = fields []
+consumeWHNF :: a -> Input
+consumeWHNF !_ = fields []
 
 -- If something is opaque and all we know is how to generate an arbitrary one,
 -- we can fall back on its Arbitrary instance
-produceAtomic :: Arbitrary b => Inputs -> Gen b
-produceAtomic _ = arbitrary
+produceArbitrary :: Arbitrary b => Inputs -> Gen b
+produceArbitrary _ = arbitrary
 
 -- Always use this to destruct the fields of a product. It makes sure that you
--- get unique variants embedded in the Cases... and there is absolutely no
+-- get unique variants embedded in the Inputs... and there is absolutely no
 -- reason not to use it.
-fields :: [(Word, Cases)] -> Cases
+fields :: [(Word, Input)] -> Input
 fields =
-  Cases . Urn.fromList .
+  Input . Urn.fromList .
     zipWith (\v (weight, cases) ->
-               (weight, (Variant (variant v), cases))) [1..]
+               (weight, (Variant (variant v), cases))) [0..]
 
 -- We can hook into QuickCheck's existing Arbitrary infrastructure by using
 -- a newtype to differentiate our way of generating things.
@@ -162,10 +162,10 @@ instance (Consume a, Produce b) => Produce (a -> b) where
       recur (input (consume a) <> inputs)
 
 instance Produce Integer where
-  produce = produceAtomic
+  produce = produceArbitrary
 
 instance Consume Integer where
-  consume = consumeAtomic
+  consume = consumeWHNF
 
 instance (Produce a, Produce b) => Produce (a, b) where
   produce inputs =
