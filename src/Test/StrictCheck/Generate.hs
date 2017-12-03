@@ -9,7 +9,7 @@ module Test.StrictCheck.Generate
   , fields
   , recur
   , consumeFlat
-  , produceArbitrary
+  , produceFlat
   , Lazy(..)
   , lazy
   ) where
@@ -89,8 +89,8 @@ consumeFlat varyA !a =
 
 -- | If something is opaque and all we know is how to generate an arbitrary one,
 -- we can fall back on its Arbitrary instance.
-produceArbitrary :: Arbitrary b => Inputs -> Gen b
-produceArbitrary _ = arbitrary
+produceFlat :: Arbitrary b => Inputs -> Gen b
+produceFlat _ = arbitrary
 
 
 -------------------------------------------------------------------------
