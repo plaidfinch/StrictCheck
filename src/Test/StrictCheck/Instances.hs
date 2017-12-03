@@ -16,7 +16,7 @@ instance Produce Integer where
   produce = produceArbitrary
 
 instance Consume Integer where
-  consume = consumeVarying variant
+  consume = consumeFlat variant
 
 instance (Produce a, Produce b) => Produce (a, b) where
   produce inputs =

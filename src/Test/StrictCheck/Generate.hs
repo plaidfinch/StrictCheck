@@ -8,8 +8,7 @@ module Test.StrictCheck.Generate
   , Produce(..)
   , fields
   , recur
-  , consumeVarying
-  , consumeWHNF
+  , consumeFlat
   , produceArbitrary
   , Lazy(..)
   , lazy
@@ -80,16 +79,11 @@ fields =
                (1, (Variant (variant v), input)))
             [(0 :: Int) ..]
 
--- | If something is opaque and all we know is that it can be reduced to whnf,
--- this default consumer should be used.
-consumeWHNF :: a -> Input
-consumeWHNF !_ = fields []
-
 -- | If a non-algebraic input contains entropy needed to randomize output, use
 -- some function to capture this entropy. In most cases, this will be a thinly
 -- wrapped call to variant.
-consumeVarying :: (forall b. a -> Gen b -> Gen b) -> a -> Input
-consumeVarying varyA !a =
+consumeFlat :: (forall b. a -> Gen b -> Gen b) -> a -> Input
+consumeFlat varyA !a =
   Input . Just . Urn.singleton 1 $
     (Variant (varyA a), Input Nothing)
 
@@ -166,7 +160,7 @@ instance (Consume a, Produce b) => Produce (a -> b) where
       recur (Inputs (consume a : inputs))
 
 instance Consume (a -> b) where
-  consume = consumeWHNF
+  consume = consumeFlat (const id)
 
 
 ---------------------------------------------
