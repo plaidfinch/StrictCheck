@@ -49,7 +49,7 @@ newtype Inputs = Inputs [Input]
 class Consume a where
   consume :: a -> Input
   default consume :: (Generic a, GFields (Rep a)) => a -> Input
-  consume x = fields (gFields (from x))
+  consume x = fields (gFields (from x) [])
 
 -- | Produce an arbitrary construction, but using Inputs to drive the
 -- implicit destruction of the original input value.
@@ -184,23 +184,23 @@ lazy = produce (Inputs [])
 --------------------------------------------
 
 class GFields f where
-  gFields :: f p -> [Input]
+  gFields :: f p -> ([Input] -> [Input])
 
 instance GFields V1 where
-  gFields _ = []
+  gFields _ = id
 
 instance GFields U1 where
-  gFields !U1 = []
+  gFields !U1 = id
 
 instance (GFields f, GFields g) => GFields (f :+: g) where
   gFields (L1 x) = gFields x
   gFields (R1 x) = gFields x
 
 instance (GFields f, GFields g) => GFields (f :*: g) where
-  gFields (x :*: y) = gFields x ++ gFields y
+  gFields (x :*: y) = gFields x . gFields y
 
 instance (GFields f) => GFields (M1 i t f) where
   gFields (M1 x) = gFields x
 
 instance (Consume c) => GFields (K1 i c) where
-  gFields (K1 x) = [consume x]
+  gFields (K1 x) = (consume x :)
