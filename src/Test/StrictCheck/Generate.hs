@@ -183,6 +183,18 @@ lazy = produce (Inputs [])
 -- Deriving Consume instances generically --
 --------------------------------------------
 
+-- | gFields produces a difference list corresponding to the consumed inputs of
+-- all fields in the data structure. It correctly handles nesting: that is, like
+-- a handwritten instance of Consume, it places all fields from the same
+-- constructor within the same "level" of the Input, so that they are all
+-- simultaneously exposed for destruction when the constructor is forced.
+
+-- NOTE: gFields produces a difference list because we can't rely on Generics to
+-- give us a right-nested sequence of product constructors. If there is left-
+-- nesting, the naive implementation would suffer from quadratic slowdown. The
+-- use of a difference list reassociates all the appending to make sure it's
+-- linear.
+
 class GFields f where
   gFields :: f p -> ([Input] -> [Input])
 
