@@ -13,10 +13,10 @@ instance (Consume a) => Consume [a]
 instance (Consume a) => Consume (Tree a)
 
 instance Produce Integer where
-  produce = produceFlat
+  produce = produceArbitrary
 
 instance Consume Integer where
-  consume = consumeFlat variant
+  consume = consumeCoArbitrary
 
 instance (Produce a, Produce b) => Produce (a, b) where
   produce inputs =

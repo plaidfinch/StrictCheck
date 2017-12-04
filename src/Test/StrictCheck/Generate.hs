@@ -8,8 +8,9 @@ module Test.StrictCheck.Generate
   , Produce(..)
   , fields
   , recur
-  , consumeFlat
-  , produceFlat
+  , consumeTrivial
+  , consumeCoArbitrary
+  , produceArbitrary
   , Lazy(..)
   , lazy
   ) where
@@ -79,18 +80,23 @@ fields =
                (1, (Variant (variant v), input)))
             [(0 :: Int) ..]
 
--- | If a non-algebraic input contains entropy needed to randomize output, use
--- some function to capture this entropy. In most cases, this will be a thinly
--- wrapped call to variant.
-consumeFlat :: (forall b. a -> Gen b -> Gen b) -> a -> Input
-consumeFlat varyA !a =
+-- | Use the CoArbitrary instance for a type to consume it. This should only be
+-- used for "flat" types, i.e. those which contain no interesting substructure.
+consumeCoArbitrary :: CoArbitrary a => a -> Input
+consumeCoArbitrary !a =
   Input . Just . Urn.singleton 1 $
-    (Variant (varyA a), Input Nothing)
+    (Variant (coarbitrary a), Input Nothing)
 
--- | If something is opaque and all we know is how to generate an arbitrary one,
--- we can fall back on its Arbitrary instance.
-produceFlat :: Arbitrary b => Inputs -> Gen b
-produceFlat _ = arbitrary
+-- | If a type has no observable properties or substructure which can be used
+-- to drive the randomization of output, consumption should merely evaluate a
+-- value to weak-head normal form.
+consumeTrivial :: a -> Input
+consumeTrivial !_ = Input Nothing
+
+-- | Use the Arbitrary instance for a type to produce it. This should only be
+-- used for "flat" types, i.e. those which contain no interesting substructure.
+produceArbitrary :: Arbitrary b => Inputs -> Gen b
+produceArbitrary _ = arbitrary
 
 
 -------------------------------------------------------------------------
@@ -160,7 +166,7 @@ instance (Consume a, Produce b) => Produce (a -> b) where
       recur (Inputs (consume a : inputs))
 
 instance Consume (a -> b) where
-  consume = consumeFlat (const id)
+  consume = consumeTrivial
 
 
 ---------------------------------------------
