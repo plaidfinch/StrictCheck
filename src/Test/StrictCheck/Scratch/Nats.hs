@@ -16,7 +16,8 @@ import GHC.Generics
 import Data.IORef
 import System.IO.Unsafe as Unsafe
 
-import Test.StrictCheck.Generate
+import Test.StrictCheck.Produce
+import Test.StrictCheck.Consume
 
 import Test.StrictCheck.Scratch.Observe
 

@@ -30,7 +30,10 @@ library
                        containers >= 0.5.10
   exposed-modules:     Test.StrictCheck
                        Test.StrictCheck.Variadic,
-                       Test.StrictCheck.Generate,
+                       Test.StrictCheck.Consume,
+                       Test.StrictCheck.Produce,
+                       Test.StrictCheck.Observe,
+                       Test.StrictCheck.Internal.Inputs
                        Test.StrictCheck.Instances,
                        Test.StrictCheck.Scratch.Observe,
                        Test.StrictCheck.Scratch.LazyCoArbitrary,

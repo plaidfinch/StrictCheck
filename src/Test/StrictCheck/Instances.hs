@@ -3,7 +3,8 @@
 
 module Test.StrictCheck.Instances where
 
-import Test.StrictCheck.Generate
+import Test.StrictCheck.Consume
+import Test.StrictCheck.Produce
 import Test.QuickCheck
 
 import Data.Tree

@@ -3,7 +3,8 @@
 
 module Test.StrictCheck
   ( module Test.StrictCheck.Variadic
-  , module Test.StrictCheck.Generate
+  , module Test.StrictCheck.Produce
+  , module Test.StrictCheck.Consume
   , module Test.StrictCheck.Instances
 
   , module Test.StrictCheck.Scratch.Observe
@@ -13,7 +14,8 @@ module Test.StrictCheck
 
 
 import Test.StrictCheck.Variadic
-import Test.StrictCheck.Generate
+import Test.StrictCheck.Produce
+import Test.StrictCheck.Consume
 import Test.StrictCheck.Instances
 
 import Test.StrictCheck.Scratch.Observe
