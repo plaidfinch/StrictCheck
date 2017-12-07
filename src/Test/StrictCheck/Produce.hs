@@ -4,6 +4,8 @@ module Test.StrictCheck.Produce
   , produceArbitrary
   , Lazy(..)
   , lazy
+  , Input
+  , Inputs
   ) where
 
 import Test.QuickCheck
