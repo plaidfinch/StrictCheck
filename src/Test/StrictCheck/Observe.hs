@@ -66,6 +66,9 @@ data PrettyDemand string =
 instance Functor PrettyDemand where
   fmap f (Constr name (Left thunks)) =
     Constr (f name) (Left $ fmap (fmap (fmap f)) thunks)
+  fmap f (Constr name (Right fields)) =
+    Constr (f name)
+           (Right $ (fmap (\(a, thunk) -> (f a, fmap (fmap f) thunk))) fields)
 
 
 ---------------------------
