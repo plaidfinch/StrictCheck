@@ -5,37 +5,13 @@
 module Test.StrictCheck.Variadic where
 
 import Data.Kind
+import Generics.SOP
+import Generics.SOP.NP
 
---------------------------------------------------------------------------------
--- Assert that all types in a list obey a unary constraint
 
-type family All (f :: k -> Constraint) (ts :: [k]) :: Constraint where
-  All f '[]      = ()
-  All f (t : ts) = (f t, All f ts)
-
---------------------------------------------------------------------------------
--- Heterogeneous lists indexed by the types of their contents
-
-data Tuple (ts :: [*]) where
-  TEmpty  :: Tuple '[]
-  (:::) :: t -> Tuple ts -> Tuple (t : ts)
-
-instance (All Show ts) => Show (Tuple ts) where
-  show TEmpty     = "TEmpty"
-  show (x ::: xs) = show x ++ " ::: " ++ show xs
-
--- A list of types: this is just a "structural proxy"
-data Types (ts :: [k]) where
-  NoTypes :: Types '[]
-  Types   :: Types ts -> Types (t : ts)
-
--- For *literally* any list of types, we can produce such a proxy
-class                     KnownTypes (ts :: [k]) where types :: Types ts
-instance                  KnownTypes '[]         where types = NoTypes
-instance KnownTypes ts => KnownTypes (t : ts)    where types = Types types
-
---------------------------------------------------------------------------------
--- Manipulating the types of curried functions
+-------------------------------------------------
+-- Manipulating the types of curried functions --
+-------------------------------------------------
 
 -- Given a function, return a list of all its argument types
 type family Args (f :: *) :: [*] where
@@ -56,8 +32,10 @@ type family WithoutArgs (args :: [*]) (f :: *) :: * where
 -- Strip all arguments from a function type, yielding its (non-function) result
 type Result f = WithoutArgs (Args f) f
 
---------------------------------------------------------------------------------
--- Collapsing curried functions into data structures
+
+-------------------------------------------------------
+-- Collapsing curried functions into data structures --
+-------------------------------------------------------
 
 -- A Function represents some n-ary function, currySomed into a pseudo-list
 data Function (args :: [*]) (res :: *) where
@@ -80,54 +58,58 @@ instance Applicative (Function args) => Applicative (Function (a : args)) where
 -- I don't think it's very useful. Left as an exercise to the reader.
 
 -- We can apply a Function to a matching list of arguments
-applyFunction :: Function args res -> Tuple args -> res
-applyFunction (Res res)    TEmpty         = res
-applyFunction (Arg lambda) (a ::: rest) = applyFunction (lambda a) rest
+applyFunction :: Function args res -> NP I args -> res
+applyFunction (Res res)    Nil           = res
+applyFunction (Arg lambda) (I a :* rest) = applyFunction (lambda a) rest
 
 -- A nice infix notation for applying a Function
-($$) :: Function args res -> Tuple args -> res
+($$) :: Function args res -> NP I args -> res
 ($$) = applyFunction
 
 -- Additionally, we can transform a function from a heterogeneous list to some
 -- result into a Function.
-toFunction :: KnownTypes xs => (Tuple xs -> res) -> Function xs res
-toFunction f = go types f
+toFunction :: SListI xs => (NP I xs -> res) -> Function xs res
+toFunction f = go (pure_NP (K ())) f
   where
     -- The use of CPS style here prevents quadratic blowup
-    go :: Types xs -> (Tuple xs -> res) -> Function xs res
-    go NoTypes    k = Res (k TEmpty)
-    go (Types ts) k = Arg (\a -> go ts (k . (a :::)))
+    go :: NP (K ()) xs -> (NP I xs -> res) -> Function xs res
+    go Nil       k = Res (k Nil)
+    go (_ :* ts) k = Arg (\a -> go ts (k . (I a :*)))
 
---------------------------------------------------------------------------------
--- Partial currying, Functionically
 
--- The Curry class lets us embed a function in a Function, or extract it
+--------------------------------------
+-- Partial currying, Functionically --
+--------------------------------------
+
+-- | The Curry class lets us embed a function in a Function, or extract it
 -- This is yet another "inductive typeclass" definition
 class Curry (args :: [*]) (function :: *) where
    curryFunction   :: function -> Function args (WithoutArgs args function)
    uncurryFunction :: Function args (WithoutArgs args function) -> function
 
--- We can always move back and forth between a (Res x) and an x
+-- | We can always move back and forth between a (Res x) and an x
 instance Curry '[] x where
   curryFunction        x  = Res x
   uncurryFunction (Res x) =     x
 
--- And if we know how to move back and forth between a Function on args & rest and
--- its corresponding function, we can do the same if we add one more argument
--- to the front of the list and to its corresponding function
+-- | If we know how to move back and forth between a Function on args & rest and
+-- its corresponding function, we can do the same if we add one more argument to
+-- the front of the list and to its corresponding function
 instance Curry args rest => Curry (a : args) (a -> rest) where
   curryFunction        f  = Arg $ \a -> curryFunction   (f a)
   uncurryFunction (Arg f) =       \a -> uncurryFunction (f a)
 
---------------------------------------------------------------------------------
--- And now, the punchline: variadic currying/uncurrying, aka (un)curryAll-ing
+
+--------------------------------------------------------
+-- Variadic currying/uncurrying, aka (un)curryAll-ing --
+--------------------------------------------------------
 
 curryAll :: Curry (Args function) function
          => function
-         -> (Tuple (Args function) -> Result function)
+         -> (NP I (Args function) -> Result function)
 curryAll = applyFunction . curryFunction
 
-uncurryAll :: (Curry (Args function) function, KnownTypes (Args function))
-           => (Tuple (Args function) -> Result function)
+uncurryAll :: (Curry (Args function) function, SListI (Args function))
+           => (NP I (Args function) -> Result function)
            -> function
 uncurryAll = uncurryFunction . toFunction

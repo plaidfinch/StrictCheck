@@ -122,7 +122,7 @@ observeDemand context f input =
     return (output, inputDemand, outputDemand)
   where
     {-# NOINLINE instrument #-}
-    instrument :: Observe x => x -> (x, Field 'Observing x)
+    instrument :: forall x. Observe x => x -> (x, Field 'Observing x)
     instrument x =
       unsafePerformIO $ do
         ref <- newIORef T
@@ -133,9 +133,9 @@ observeDemand context f input =
                 , R ref )
 
     {-# NOINLINE freeze #-}
-    freeze :: forall a. Observe a => Field 'Observing a -> Field 'Describing a
+    freeze :: forall x. Observe x => Field 'Observing x -> Field 'Describing x
     freeze (R ref) =
-      F . fmap (reify @a freeze) . unsafePerformIO $ readIORef ref
+      F . fmap (reify @x freeze) . unsafePerformIO $ readIORef ref
 
 -- | Force a value in some applicative context. This is useful for ensuring that
 -- values are evaluated in the correct order inside of unsafePerformIO blocks.
