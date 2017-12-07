@@ -7,17 +7,16 @@ module Test.StrictCheck
   , module Test.StrictCheck.Consume
   , module Test.StrictCheck.Instances
 
-  , module Test.StrictCheck.Scratch.Observe
-  , module Test.StrictCheck.Scratch.LazyCoArbitrary
-  , module Test.StrictCheck.Scratch.Nats
+  , module Generics.SOP
+  , module Generics.SOP.NP
   ) where
 
 
 import Test.StrictCheck.Variadic
 import Test.StrictCheck.Produce
 import Test.StrictCheck.Consume
+import Test.StrictCheck.Observe
 import Test.StrictCheck.Instances
 
-import Test.StrictCheck.Scratch.Observe
-import Test.StrictCheck.Scratch.LazyCoArbitrary
-import Test.StrictCheck.Scratch.Nats
+import Generics.SOP
+import Generics.SOP.NP

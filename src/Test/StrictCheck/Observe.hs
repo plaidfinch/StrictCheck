@@ -2,7 +2,7 @@
   AllowAmbiguousTypes, UndecidableInstances, DefaultSignatures,
   TypeApplications, ScopedTypeVariables, FlexibleContexts, ConstraintKinds,
   DeriveFunctor, FlexibleInstances, StandaloneDeriving, DeriveGeneric,
-  DeriveAnyClass #-}
+  DeriveAnyClass, TypeOperators #-}
 
 module Test.StrictCheck.Observe where
 
@@ -12,6 +12,7 @@ import System.IO.Unsafe
 import Data.Kind ( Type )
 import qualified GHC.Generics as GHC
 import Generics.SOP
+import Generics.SOP.NP
 import Generics.SOP.Constraint
 import Control.DeepSeq
 
@@ -29,6 +30,9 @@ data Field (t :: DemandKind) (a :: Type) where
   F ::        Thunk (Demand a 'Describing) -> Field 'Describing a
   R :: IORef (Thunk (Demand a 'Observing)) -> Field 'Observing  a
 
+unF :: Field 'Describing a -> Thunk (Demand a 'Describing)
+unF (F t) = t
+
 instance Show (Demand a 'Describing) => Show (Field 'Describing a) where
   showsPrec d (F t) =
     showParen (d > 10) $ showString "F " . showsPrec 11 t
@@ -40,6 +44,10 @@ instance NFData (Demand a 'Describing) => NFData (Field 'Describing a) where
 -------------------------------------------------------------
 -- For brevity, some abbreviations for repeated signatures --
 -------------------------------------------------------------
+
+type family Demands (ts :: [Type]) (d :: DemandKind) :: [Type] where
+  Demands     '[]  d = '[]
+  Demands (t : ts) d = Demand t d : Demands ts d
 
 type Observation a t =
   (forall x. Observe x => x -> (x, Field t x))
@@ -100,37 +108,71 @@ class Observe (a :: Type) where
 -- Observing demand behavior of arbitrary functions --
 ------------------------------------------------------
 
+data PairWithField (d :: DemandKind) x =
+  PWF x (Field d x)
+
+unPWF :: PairWithField d x -> (I x, Field d x)
+unPWF (PWF x fx) = (I x, fx)
+
+data ThunkDemand (d :: DemandKind) x =
+  TD (Thunk (Demand x d))
+
+unwrapTDs :: NP (ThunkDemand d) xs -> NP Thunk (Demands xs d)
+unwrapTDs         Nil  = Nil
+unwrapTDs (TD x :* xs) = x :* unwrapTDs xs
+
+unzipWith_NP :: (forall x. f x -> (g x, h x))
+             -> NP f xs -> (NP g xs, NP h xs)
+unzipWith_NP _            Nil  = (Nil, Nil)
+unzipWith_NP perElem (x :* xs) =
+  let (y, z)   = perElem x
+      (ys, zs) = unzipWith_NP perElem xs
+  in (y :* ys, z :* zs)
+
 -- | Given a context, function, and input, calculate the output of the function,
 -- the demand placed on that output by the context, and the demand induced on
 -- its input by that output demand. This is referentially transparent.
-observeDemand :: (Observe a, Observe b,
-                  NFData (Demand a 'Describing),
-                  NFData (Demand b 'Describing))
-       => (b -> ()) -> (a -> b) -> a
-       -> (b, Thunk (Demand a 'Describing),
-              Thunk (Demand b 'Describing))
-observeDemand context f input =
+observeDemand :: forall inputs output.
+              (All Observe inputs, Observe output,
+               All NFData (Demands inputs 'Describing ),
+               NFData (Demand output 'Describing))
+       => (output -> ()) -> (NP I inputs -> output) -> NP I inputs
+       -> (output, (NP Thunk (Demands inputs 'Describing),
+                       Thunk (Demand  output 'Describing)))
+observeDemand context f inputs =
   unsafePerformIO $ do
-    let output = f observableInput
-        (observableInput,  inputDemandMutable)  = instrument input
-        (observableOutput, outputDemandMutable) = instrument output
-        F inputDemand  = freeze inputDemandMutable
+    let output = f observableInputs
+        (observableInputs, inputDemandsMutable) =
+          unzipWith_NP unPWF $ cmap_NP pObserve (instrument . unI) inputs
+        (I observableOutput, outputDemandMutable) =
+          unPWF $ instrument output
+        inputDemands = unwrapTDs $
+          cmap_NP pObserve (TD . unF . freeze) inputDemandsMutable
         F outputDemand = freeze outputDemandMutable
     evaluate (context observableOutput)
-    evaluate (rnf inputDemand)
+    evaluate (rnfThunks inputDemands)
     evaluate (rnf outputDemand)
-    return (output, inputDemand, outputDemand)
+    return (output, (inputDemands, outputDemand))
   where
+    pObserve = Proxy :: Proxy Observe
+    pNFData  = Proxy :: Proxy NFData
+
+    rnfThunks :: All NFData xs => NP Thunk xs -> ()
+    rnfThunks = unK . ccata_NP pNFData (K ())
+                      (\fy kys -> K (rnf fy `seq` rnf kys))
+
     {-# NOINLINE instrument #-}
-    instrument :: forall x. Observe x => x -> (x, Field 'Observing x)
+    instrument :: forall x. Observe x => x -> PairWithField 'Observing x
     instrument x =
       unsafePerformIO $ do
         ref <- newIORef T
-        return ( unsafePerformIO $ do
-                    let (x', demandX) = observe instrument x
-                    writeIORef ref (E demandX)
-                    return x'
-                , R ref )
+        return $ PWF (unsafePerformIO $ do
+                        let (x', demandX) =
+                              observe ((\(I a, fa) -> (a, fa))
+                                       . unPWF . instrument) x
+                        writeIORef ref (E demandX)
+                        return x')
+                     (R ref)
 
     {-# NOINLINE freeze #-}
     freeze :: forall x. Observe x => Field 'Observing x -> Field 'Describing x
@@ -165,7 +207,7 @@ prettyDemandTree demand =
 ---------------------------------------------------
 
 newtype GDemand a t =
-  GD (SOP (Field t) (Code a))
+  GD (NS (NP (Field t)) (Code a))
   deriving (GHC.Generic)
 
 deriving instance ( SListI (Code a)
@@ -189,7 +231,7 @@ type GenericObserve a =
 gObserve :: forall a t. GenericObserve a => Observation a t
 gObserve observeF a =
   let (repA', dA) = observeSum (unSOP (from a))
-  in (to (SOP repA'), GD (SOP dA))
+  in (to (SOP repA'), GD dA)
   where
     observeSum ::
       forall xss. All (All Observe) xss
@@ -214,8 +256,8 @@ gObserve observeF a =
       in (I result :* results, demand :* demands)
 
 gReify :: forall a s t. GenericObserve a => Reification a s t
-gReify reifyF (GD (SOP demand)) =
-  GD . SOP $ reifySum demand
+gReify reifyF (GD demand) =
+  GD $ reifySum demand
   where
     reifySum ::
       forall xss. All (All Observe) xss
@@ -231,7 +273,7 @@ gReify reifyF (GD (SOP demand)) =
     reifyProd (f :* fs) = reifyF f :* reifyProd fs
 
 gForce :: forall a t. GenericObserve a => Forcing a t
-gForce forceF (GD (SOP demand)) a =
+gForce forceF (GD demand) a =
   forceSum demand (unSOP $ from a)
   where
     forceSum :: forall xss. All (All Observe) xss
@@ -252,7 +294,7 @@ gForce forceF (GD (SOP demand)) a =
 
 gPretty :: forall a t. (GenericObserve a, HasDatatypeInfo a)
         => Prettying a t
-gPretty prettyF (GD (SOP demand)) =
+gPretty prettyF (GD demand) =
   prettySum demand (constructorInfo $ datatypeInfo (Proxy :: Proxy a))
   where
     prettySum :: forall xss. All (All Observe) xss
