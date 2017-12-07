@@ -63,6 +63,10 @@ data PrettyDemand string =
             [(string, Thunk (PrettyDemand string))])
   deriving (Eq, Ord, Show)
 
+instance Functor PrettyDemand where
+  fmap f (Constr name (Left thunks)) =
+    Constr (f name) (Left $ fmap (fmap (fmap f)) thunks)
+
 
 ---------------------------
 -- The Observe typeclass --
