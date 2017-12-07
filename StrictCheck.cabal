@@ -30,15 +30,15 @@ library
                        containers >= 0.5.10,
                        generics-sop >= 0.3.1.0
   exposed-modules:     Test.StrictCheck
-                       Test.StrictCheck.Variadic,
+                       Test.StrictCheck.Curry,
                        Test.StrictCheck.Consume,
                        Test.StrictCheck.Produce,
                        Test.StrictCheck.Observe,
                        Test.StrictCheck.Internal.Inputs
-                       Test.StrictCheck.Instances,
-                       Test.StrictCheck.Scratch.Observe,
-                       Test.StrictCheck.Scratch.LazyCoArbitrary,
-                       Test.StrictCheck.Scratch.Nats
+                       Test.StrictCheck.Instances
+                       -- Test.StrictCheck.Scratch.Observe,
+                       -- Test.StrictCheck.Scratch.LazyCoArbitrary,
+                       -- Test.StrictCheck.Scratch.Nats
 -- Do something about type defaults?
   ghc-options:         -Wall
 

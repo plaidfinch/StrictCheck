@@ -2,7 +2,7 @@
   TypeApplications, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts,
   AllowAmbiguousTypes, ScopedTypeVariables, UndecidableInstances #-}
 
-module Test.StrictCheck.Variadic where
+module Test.StrictCheck.Curry where
 
 import Data.Kind
 import Generics.SOP
