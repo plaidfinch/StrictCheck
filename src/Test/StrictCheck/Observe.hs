@@ -59,9 +59,9 @@ type Prettying a t =
 
 data PrettyDemand string =
   Constr string
-    [ (Maybe string,
-       Thunk (PrettyDemand string)) ]
-  deriving (Eq, Ord, Show, Functor)
+    (Either [Thunk (PrettyDemand string)]
+            [(string, Thunk (PrettyDemand string))])
+  deriving (Eq, Ord, Show)
 
 
 ---------------------------
@@ -256,12 +256,12 @@ gPretty prettyF (GD (SOP demand)) =
     prettySum (Z fields) (ci :* _) =
       case ci of
         Constructor name ->
-          Constr name (zip (repeat Nothing) (prettyProd fields))
+          Constr name (Left (prettyProd fields))
         Infix name _ _ ->
-          Constr name (zip (repeat Nothing) (prettyProd fields))
+          Constr name (Left (prettyProd fields))
         Record name fieldNames ->
-          Constr name (zip (map Just $ listFieldNames fieldNames)
-                           (prettyProd fields))
+          Constr name (Right $ zip (listFieldNames fieldNames)
+                                   (prettyProd fields))
 
     prettyProd :: forall xs. All Observe xs
                => NP (Field t) xs -> [Thunk (PrettyDemand String)]
