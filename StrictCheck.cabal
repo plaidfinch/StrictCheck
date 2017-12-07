@@ -27,7 +27,8 @@ library
                        urn-random >= 0.1.0.0,
                        extra >= 1.6,
                        monad-loops >= 0.4.3,
-                       containers >= 0.5.10
+                       containers >= 0.5.10,
+                       generics-sop >= 0.3.1.0
   exposed-modules:     Test.StrictCheck
                        Test.StrictCheck.Variadic,
                        Test.StrictCheck.Consume,

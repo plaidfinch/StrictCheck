@@ -1,7 +1,8 @@
-{-# language DataKinds, GADTs, KindSignatures, BangPatterns, TypeFamilies,
-  RankNTypes, AllowAmbiguousTypes, UndecidableInstances, PolyKinds,
-  DefaultSignatures, TypeOperators, EmptyCase, LambdaCase,
-  TypeApplications, ScopedTypeVariables, FlexibleContexts, ConstraintKinds #-}
+{-# language DataKinds, GADTs, BangPatterns, TypeFamilies, RankNTypes,
+  AllowAmbiguousTypes, UndecidableInstances, DefaultSignatures,
+  TypeApplications, ScopedTypeVariables, FlexibleContexts, ConstraintKinds,
+  DeriveFunctor, FlexibleInstances, StandaloneDeriving, DeriveGeneric,
+  DeriveAnyClass #-}
 
 module Test.StrictCheck.Observe where
 
@@ -9,25 +10,205 @@ import Data.IORef
 import System.IO.Unsafe
 
 import Data.Kind ( Type )
-import GHC.Generics
-import Data.Void
+import qualified GHC.Generics as GHC
+import Generics.SOP
+import Generics.SOP.Constraint
+import Control.DeepSeq
+
+
+--------------------------------------------------------
+-- The basic types which make up a demand description --
+--------------------------------------------------------
 
 data DemandKind = Observing | Describing
 
 data Thunk a = E !a | T
+  deriving (Eq, Ord, Show, Functor, GHC.Generic, NFData)
 
-data Field (a :: Type) (t :: DemandKind) where
-  F ::        Thunk (Demand a 'Describing) -> Field a 'Describing
-  R :: IORef (Thunk (Demand a 'Observing)) -> Field a 'Observing
+data Field (t :: DemandKind) (a :: Type) where
+  F ::        Thunk (Demand a 'Describing) -> Field 'Describing a
+  R :: IORef (Thunk (Demand a 'Observing)) -> Field 'Observing  a
+
+instance Show (Demand a 'Describing) => Show (Field 'Describing a) where
+  showsPrec d (F t) =
+    showParen (d > 10) $ showString "F " . showsPrec 11 t
+
+instance NFData (Demand a 'Describing) => NFData (Field 'Describing a) where
+  rnf (F t) = rnf t
+
+
+-------------------------------------------------------------
+-- For brevity, some abbreviations for repeated signatures --
+-------------------------------------------------------------
+
+type Observation a t =
+  (forall x. Observe x => x -> (x, Field t x))
+  -> a -> (a, Demand a t)
+
+type Reification a s t =
+  (forall x. Observe x => Field s x -> Field t x)
+   -> Demand a s -> Demand a t
+
+type Forcing a t =
+  (forall x. Observe x => Field t x -> x -> ())
+   -> Demand a t -> a -> ()
+
+
+---------------------------
+-- The Observe typeclass --
+---------------------------
 
 class Observe (a :: Type) where
   type Demand a :: DemandKind -> Type
+  type Demand a = GDemand a
 
-  observe :: (forall x. Observe x => x -> (x, Field x t))
-          -> a -> (a, Demand a t)
+  observe :: Observation a t
+  default observe :: GenericObserve a => Observation a t
+  observe = gObserve
 
-  reify :: (forall x. Field x s -> Field x t)
-        -> Demand a s -> Demand a t
+  reify :: Reification a s t
+  default reify :: GenericObserve a => Reification a s t
+  reify = gReify
 
-  force :: (forall x. Observe x => Field x t -> x -> ())
-        -> Demand a t -> a -> ()
+  force :: Forcing a t
+  default force :: GenericObserve a => Forcing a t
+  force = gForce
+
+
+-- | Given a context, function, and input, calculate the output of the function,
+-- the demand placed on that output by the context, and the demand induced on
+-- its input by that output demand. This is referentially transparent.
+observeDemand :: (Observe a, Observe b,
+                  NFData (Demand a 'Describing),
+                  NFData (Demand b 'Describing))
+       => (b -> ()) -> (a -> b) -> a
+       -> (b, Thunk (Demand a 'Describing),
+              Thunk (Demand b 'Describing))
+observeDemand context f input =
+  unsafePerformIO $ do
+    let output = f observableInput
+        (observableInput,  inputDemandMutable)  = instrument input
+        (observableOutput, outputDemandMutable) = instrument output
+        F inputDemand  = freeze inputDemandMutable
+        F outputDemand = freeze outputDemandMutable
+    evaluate (context observableOutput)
+    evaluate (rnf inputDemand)
+    evaluate (rnf outputDemand)
+    return (output, inputDemand, outputDemand)
+  where
+    {-# NOINLINE instrument #-}
+    instrument :: Observe x => x -> (x, Field 'Observing x)
+    instrument x =
+      unsafePerformIO $ do
+        ref <- newIORef T
+        return ( unsafePerformIO $ do
+                    let (x', demandX) = observe instrument x
+                    writeIORef ref (E demandX)
+                    return x'
+                , R ref )
+
+    {-# NOINLINE freeze #-}
+    freeze :: forall a. Observe a => Field 'Observing a -> Field 'Describing a
+    freeze (R ref) =
+      F . fmap (reify @a freeze) . unsafePerformIO $ readIORef ref
+
+-- | Force a value in some applicative context. This is useful for ensuring that
+-- values are evaluated in the correct order inside of unsafePerformIO blocks.
+evaluate :: Applicative f => a -> f ()
+evaluate !_ = pure ()
+
+-- | Given an observable piece of data, construct the demand corresponding to
+-- a full evaluation of that value. This has no instrumentation overhead.
+demandShape :: Observe a => a -> Demand a 'Describing
+demandShape = snd . observe (\x -> (x, F . E . demandShape $ x))
+
+
+---------------------------------------------------
+-- Generic implementation of the Observe methods --
+---------------------------------------------------
+
+newtype GDemand a t =
+  GD (SOP (Field t) (Code a))
+  deriving (GHC.Generic)
+
+deriving instance ( SListI (Code a)
+                  , AllF (Compose Eq (NP (Field 'Describing))) (Code a)
+                  ) => Eq (GDemand a 'Describing)
+deriving instance ( SListI (Code a)
+                  , AllF (Compose Eq (NP (Field 'Describing))) (Code a)
+                  , AllF (Compose Ord (NP (Field 'Describing))) (Code a)
+                  ) => Ord (GDemand a 'Describing)
+deriving instance ( SListI (Code a)
+                  , AllF (Compose Show (NP (Field 'Describing))) (Code a)
+                  ) => Show (GDemand a 'Describing)
+deriving instance ( SListI (Code a)
+                  , AllF (Compose NFData (NP (Field 'Describing))) (Code a)
+                  ) => NFData (GDemand a 'Describing)
+
+type GenericObserve a =
+  (Generic a, Demand a ~ GDemand a, All (All Observe) (Code a))
+
+
+gObserve :: forall a t. GenericObserve a => Observation a t
+gObserve observeF a =
+  let (repA', dA) = observeSum (unSOP (from a))
+  in (to (SOP repA'), GD (SOP dA))
+  where
+    observeSum ::
+      forall xss. All (All Observe) xss
+        =>  NS (NP I) xss
+        -> (NS (NP I) xss, NS (NP (Field t)) xss)
+    observeSum rep =
+      case rep of
+        Z cons ->
+          let (results, demands) = observeProd cons
+          in (Z results, Z demands)
+        S next ->
+          let (results, demands) = observeSum next
+          in (S results, S demands)
+
+    observeProd :: forall xs. All Observe xs
+             =>  (NP I) xs
+             -> ((NP I) xs, NP (Field t) xs)
+    observeProd Nil = (Nil, Nil)
+    observeProd (I x :* xs) =
+      let (results, demands) = observeProd xs
+          (result,  demand)  = observeF x
+      in (I result :* results, demand :* demands)
+
+gReify :: forall a s t. GenericObserve a => Reification a s t
+gReify reifyF (GD (SOP rep)) =
+  GD . SOP $ reifySum rep
+  where
+    reifySum ::
+      forall xss. All (All Observe) xss
+        => NS (NP (Field s)) xss
+        -> NS (NP (Field t)) xss
+    reifySum (Z cons) = Z $ reifyProd cons
+    reifySum (S next) = S $ reifySum next
+
+    reifyProd :: forall xs. All Observe xs
+             => NP (Field s) xs
+             -> NP (Field t) xs
+    reifyProd Nil       = Nil
+    reifyProd (f :* fs) = reifyF f :* reifyProd fs
+
+gForce :: forall a t. GenericObserve a => Forcing a t
+gForce forceF (GD (SOP demand)) a =
+  forceSum demand (unSOP $ from a)
+  where
+    forceSum :: forall xss. All (All Observe) xss
+             => NS (NP (Field t)) xss -> NS (NP I) xss -> ()
+    forceSum sumDemand value =
+      case (sumDemand, value) of
+        (Z prodDemand, Z fields) -> forceProd prodDemand fields
+        (S sumDemand', S value') -> forceSum  sumDemand' value'
+        (Z _, S _) -> ()
+        (S _, Z _) -> ()
+
+    forceProd :: forall xs. All Observe xs
+              => NP (Field t) xs -> NP I xs -> ()
+    forceProd Nil Nil = ()
+    forceProd (d :* ds) (I x :* xs) =
+      case (forceF d x, forceProd ds xs) of
+        ((), ()) -> ()
