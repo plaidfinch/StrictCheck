@@ -53,6 +53,16 @@ type Forcing a t =
   (forall x. Observe x => Field t x -> x -> ())
    -> Demand a t -> a -> ()
 
+type Prettying a t =
+  (forall x. Observe x => Field t x -> Thunk (PrettyDemand String))
+  -> Demand a t -> PrettyDemand String
+
+data PrettyDemand string =
+  Constr string
+    [ (Maybe string,
+       Thunk (PrettyDemand string)) ]
+  deriving (Eq, Ord, Show, Functor)
+
 
 ---------------------------
 -- The Observe typeclass --
@@ -74,6 +84,14 @@ class Observe (a :: Type) where
   default force :: GenericObserve a => Forcing a t
   force = gForce
 
+  pretty :: Prettying a t
+  default pretty :: (GenericObserve a, HasDatatypeInfo a) => Prettying a t
+  pretty = gPretty
+
+
+------------------------------------------------------
+-- Observing demand behavior of arbitrary functions --
+------------------------------------------------------
 
 -- | Given a context, function, and input, calculate the output of the function,
 -- the demand placed on that output by the context, and the demand induced on
@@ -121,6 +139,18 @@ evaluate !_ = pure ()
 -- a full evaluation of that value. This has no instrumentation overhead.
 demandShape :: Observe a => a -> Demand a 'Describing
 demandShape = snd . observe (\x -> (x, F . E . demandShape $ x))
+
+-- | Convert a demand into a monomorphic tree data structure with enough info
+-- to format it in a variety of ways for human consumption.
+prettyDemandTree :: forall a. Observe a
+                 => Demand a 'Describing -> PrettyDemand String
+prettyDemandTree demand =
+  pretty @a prettyField demand
+  where
+    prettyField :: forall x. Observe x
+                => Field 'Describing x -> Thunk (PrettyDemand String)
+    prettyField (F T)     = T
+    prettyField (F (E d)) = E (prettyDemandTree @x d)
 
 
 ---------------------------------------------------
@@ -177,8 +207,8 @@ gObserve observeF a =
       in (I result :* results, demand :* demands)
 
 gReify :: forall a s t. GenericObserve a => Reification a s t
-gReify reifyF (GD (SOP rep)) =
-  GD . SOP $ reifySum rep
+gReify reifyF (GD (SOP demand)) =
+  GD . SOP $ reifySum demand
   where
     reifySum ::
       forall xss. All (All Observe) xss
@@ -212,3 +242,34 @@ gForce forceF (GD (SOP demand)) a =
     forceProd (d :* ds) (I x :* xs) =
       case (forceF d x, forceProd ds xs) of
         ((), ()) -> ()
+
+gPretty :: forall a t. (GenericObserve a, HasDatatypeInfo a)
+        => Prettying a t
+gPretty prettyF (GD (SOP demand)) =
+  prettySum demand (constructorInfo $ datatypeInfo (Proxy :: Proxy a))
+  where
+    prettySum :: forall xss. All (All Observe) xss
+              => NS (NP (Field t)) xss
+              -> NP ConstructorInfo xss
+              -> PrettyDemand String
+    prettySum (S sums)   (_  :* cis) = prettySum sums cis
+    prettySum (Z fields) (ci :* _) =
+      case ci of
+        Constructor name ->
+          Constr name (zip (repeat Nothing) (prettyProd fields))
+        Infix name _ _ ->
+          Constr name (zip (repeat Nothing) (prettyProd fields))
+        Record name fieldNames ->
+          Constr name (zip (map Just $ listFieldNames fieldNames)
+                           (prettyProd fields))
+
+    prettyProd :: forall xs. All Observe xs
+               => NP (Field t) xs -> [Thunk (PrettyDemand String)]
+    prettyProd Nil = []
+    prettyProd (f :* fs) =
+      prettyF f : prettyProd fs
+
+    listFieldNames :: NP FieldInfo xs -> [String]
+    listFieldNames Nil = []
+    listFieldNames (FieldInfo name :* fieldNames) =
+      name : listFieldNames fieldNames
