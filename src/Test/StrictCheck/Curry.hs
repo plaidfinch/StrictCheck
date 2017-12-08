@@ -37,7 +37,7 @@ type Result f = WithoutArgs (Args f) f
 -- Collapsing curried functions into data structures --
 -------------------------------------------------------
 
--- A Function represents some n-ary function, currySomed into a pseudo-list
+-- A Function represents some n-ary function, uncurried into a pseudo-list
 data Function (args :: [*]) (res :: *) where
   Res :: res -> Function '[] res
   Arg :: (a -> Function args res) -> Function (a : args) res
@@ -77,39 +77,39 @@ toFunction f = go (pure_NP (K ())) f
     go (_ :* ts) k = Arg (\a -> go ts (k . (I a :*)))
 
 
---------------------------------------
--- Partial currying, Functionically --
---------------------------------------
+----------------------------------------
+-- Partial uncurrying, Functionically --
+----------------------------------------
 
 -- | The Curry class lets us embed a function in a Function, or extract it
 -- This is yet another "inductive typeclass" definition
 class Curry (args :: [*]) (function :: *) where
-   curryFunction   :: function -> Function args (WithoutArgs args function)
-   uncurryFunction :: Function args (WithoutArgs args function) -> function
+   uncurryFunction :: function -> Function args (WithoutArgs args function)
+   curryFunction   :: Function args (WithoutArgs args function) -> function
 
 -- | We can always move back and forth between a (Res x) and an x
 instance Curry '[] x where
-  curryFunction        x  = Res x
-  uncurryFunction (Res x) =     x
+  uncurryFunction    x  = Res x
+  curryFunction (Res x) =     x
 
 -- | If we know how to move back and forth between a Function on args & rest and
 -- its corresponding function, we can do the same if we add one more argument to
 -- the front of the list and to its corresponding function
 instance Curry args rest => Curry (a : args) (a -> rest) where
-  curryFunction        f  = Arg $ \a -> curryFunction   (f a)
-  uncurryFunction (Arg f) =       \a -> uncurryFunction (f a)
+  uncurryFunction    f  = Arg $ \a -> uncurryFunction (f a)
+  curryFunction (Arg f) =       \a -> curryFunction   (f a)
 
 
 --------------------------------------------------------
--- Variadic currying/uncurrying, aka (un)curryAll-ing --
+-- Variadic uncurrying/currying, aka (un)curryAll-ing --
 --------------------------------------------------------
 
-curryAll :: Curry (Args function) function
-         => function
-         -> (NP I (Args function) -> Result function)
-curryAll = applyFunction . curryFunction
+uncurryAll :: Curry (Args function) function
+           => function
+           -> (NP I (Args function) -> Result function)
+uncurryAll = applyFunction . uncurryFunction
 
-uncurryAll :: (Curry (Args function) function, SListI (Args function))
-           => (NP I (Args function) -> Result function)
-           -> function
-uncurryAll = uncurryFunction . toFunction
+curryAll :: (Curry (Args function) function, SListI (Args function))
+         => (NP I (Args function) -> Result function)
+         -> function
+curryAll = curryFunction . toFunction
