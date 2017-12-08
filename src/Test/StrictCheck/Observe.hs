@@ -140,8 +140,8 @@ observeDemand
   ,     NFData (Demand  output 'Describing)
   ) => (output -> ())
     -> (NP I inputs ->  output)
-    -> (NP I inputs -> (output, (NP Thunk (Demands inputs 'Describing),
-                                    Thunk (Demand  output 'Describing))))
+    -> (NP I inputs -> (output, (    Thunk (Demand  output 'Describing)
+                                , NP Thunk (Demands inputs 'Describing) )))
 observeDemand context f inputs =
   unsafePerformIO $ do
     let output = f observableInputs
@@ -155,7 +155,7 @@ observeDemand context f inputs =
     evaluate (context observableOutput)
     evaluate (rnfThunks inputDemands)
     evaluate (rnf outputDemand)
-    return (output, (inputDemands, outputDemand))
+    return (output, (outputDemand, inputDemands))
   where
     pObserve = Proxy :: Proxy Observe
     pNFData  = Proxy :: Proxy NFData
@@ -165,7 +165,8 @@ observeDemand context f inputs =
                       (\fy kys -> K (rnf fy `seq` rnf kys))
 
     {-# NOINLINE instrument #-}
-    instrument :: forall x. Observe x => x -> PairWithField 'Observing x
+    instrument :: forall x. Observe x
+               => x -> PairWithField 'Observing x
     instrument x =
       unsafePerformIO $ do
         ref <- newIORef T
@@ -178,7 +179,9 @@ observeDemand context f inputs =
                      (R ref)
 
     {-# NOINLINE freeze #-}
-    freeze :: forall x. Observe x => Field 'Observing x -> Field 'Describing x
+    freeze :: forall x. Observe x
+           => Field 'Observing  x
+           -> Field 'Describing x
     freeze (R ref) =
       F . fmap (reify @x freeze) . unsafePerformIO $ readIORef ref
 
