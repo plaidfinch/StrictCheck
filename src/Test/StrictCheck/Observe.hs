@@ -132,13 +132,16 @@ unzipWith_NP perElem (x :* xs) =
 -- | Given a context, function, and input, calculate the output of the function,
 -- the demand placed on that output by the context, and the demand induced on
 -- its input by that output demand. This is referentially transparent.
-observeDemand :: forall inputs output.
-              (All Observe inputs, Observe output,
-               All NFData (Demands inputs 'Describing ),
-               NFData (Demand output 'Describing))
-       => (output -> ()) -> (NP I inputs -> output) -> NP I inputs
-       -> (output, (NP Thunk (Demands inputs 'Describing),
-                       Thunk (Demand  output 'Describing)))
+observeDemand
+  :: forall inputs output.
+  ( All Observe inputs
+  ,     Observe output
+  , All NFData (Demands inputs 'Describing)
+  ,     NFData (Demand  output 'Describing)
+  ) => (output -> ())
+    -> (NP I inputs ->  output)
+    -> (NP I inputs -> (output, (NP Thunk (Demands inputs 'Describing),
+                                    Thunk (Demand  output 'Describing))))
 observeDemand context f inputs =
   unsafePerformIO $ do
     let output = f observableInputs
