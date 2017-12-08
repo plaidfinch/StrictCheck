@@ -34,13 +34,12 @@ resolver: nightly-2017-11-24
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - .
-- location:
-   git: https://github.com/antalsz/urn-random.git
-   commit: d62f1bfe89cecbe6346e9710f2db07a3fbe2a932
-  extra-dep: true
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps: [ spoon-0.3.1, urn-random-0.1.0.0 ]
+extra-deps:
+- spoon-0.3.1
+- git: https://github.com/antalsz/urn-random.git
+  commit: d62f1bfe89cecbe6346e9710f2db07a3fbe2a932
 
 # Override default flag values for local packages and extra-deps
 flags: {}
