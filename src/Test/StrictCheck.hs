@@ -5,6 +5,7 @@ module Test.StrictCheck
   ( module Test.StrictCheck.Curry
   , module Test.StrictCheck.Produce
   , module Test.StrictCheck.Consume
+  , module Test.StrictCheck.Observe
   , module Test.StrictCheck.Instances
 
   , module Generics.SOP
