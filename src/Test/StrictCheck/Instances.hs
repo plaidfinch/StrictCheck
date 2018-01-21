@@ -1,3 +1,4 @@
+{-# language TypeOperators, TypeFamilies #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -5,19 +6,27 @@ module Test.StrictCheck.Instances where
 
 import Test.StrictCheck.Consume
 import Test.StrictCheck.Produce
--- import Test.StrictCheck.Observe
+import Test.StrictCheck.Observe
 import Test.QuickCheck
 
 import Data.Tree
+import Data.Map
 
 instance Consume ()
 instance (Consume a, Consume b) => Consume (a, b)
 instance (Consume a) => Consume [a]
 instance (Consume a) => Consume (Tree a)
 
--- instance Observe ()
--- instance (Observe a, Observe b) => Observe (a, b)
--- instance Observe a => Observe [a]
+instance Observe ()
+instance (Observe a, Observe b) => Observe (a, b)
+instance Observe a => Observe [a]
+instance Observe a => Observe (Maybe a)
+instance (Observe a, Observe b) => Observe (Either a b)
+
+instance (Observe v) => Observe (Map k v) where
+  type Demand (Map k v) = Map k `WithFieldsOf` v
+  projectD p m = WithFieldsOf (fmap p m)
+  embedD e (WithFieldsOf m) = fmap e m
 
 instance Produce Integer where
   produce = produceArbitrary

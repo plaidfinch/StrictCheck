@@ -71,9 +71,8 @@ class (Functor1 (Demand a)) => Observe (a :: *) where
   -- zipD     :: (forall x. f x -> g x -> h x) -> Demand a f -> Demand a g -> Demand a h
   -- unzipD   :: (forall x. h x -> (f x, g x)) -> Demand a h -> (Demand a f, Demand a g)
 
--- TODO: reintroduce HFunctor, make Field one
 newtype Field (f :: * -> *) (a :: *) :: * where
-  Field :: f (Demand a (Field f)) -> Field f a
+  F :: f (Demand a (Field f)) -> Field f a
 
 deriving instance (Show (f (Demand a (Field f)))) => Show (Field f a)
 
@@ -119,22 +118,13 @@ deriving instance ( SListI (Code a)
                   , AllF (Compose NFData (NP f)) (Code a)
                   ) => NFData (GDemand a f)
 
-
 type family Demands
-
-instance Observe () where
-  projectD _ _ = GD (Z Nil)
-  embedD   _ _ = ()
-
-instance (Observe a, Observe b) => Observe (a, b) where
-  projectD p (a, b) = GD (Z (p a :* p b  :* Nil))
-  embedD   e (GD (Z (fa :* fb  :* Nil))) = (e fa, e fb)
 
 projectField :: forall a f. Observe a
              => (forall x. x -> f x)
              -> a -> Field f a
 projectField p a =
-  Field (p (projectDemand a))
+  F (p (projectDemand a))
     where
       projectDemand :: a -> Demand a (Field f)
       projectDemand a' = projectD (projectField p) a'
@@ -142,11 +132,17 @@ projectField p a =
 embedField :: forall a f. Observe a
            => (forall x. f x -> x)
            -> Field f a -> a
-embedField e (Field d) =
+embedField e (F d) =
   embedDemand (e d)
   where
     embedDemand :: Demand a (Field f) -> a
     embedDemand d' = embedD (embedField e) d'
+
+
+newtype WithFieldsOf f a field = WithFieldsOf (f (field a))
+
+instance Functor f => Functor1 (f `WithFieldsOf` a) where
+  fmap1 t (WithFieldsOf f) = WithFieldsOf (fmap t f)
 
 -- foldD :: forall a f g. Observe a
 --       => (forall x h. Demand x h -> g x)
