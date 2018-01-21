@@ -5,7 +5,7 @@ module Test.StrictCheck.Instances where
 
 import Test.StrictCheck.Consume
 import Test.StrictCheck.Produce
-import Test.StrictCheck.Observe
+-- import Test.StrictCheck.Observe
 import Test.QuickCheck
 
 import Data.Tree
@@ -15,9 +15,9 @@ instance (Consume a, Consume b) => Consume (a, b)
 instance (Consume a) => Consume [a]
 instance (Consume a) => Consume (Tree a)
 
-instance Observe ()
-instance (Observe a, Observe b) => Observe (a, b)
-instance Observe a => Observe [a]
+-- instance Observe ()
+-- instance (Observe a, Observe b) => Observe (a, b)
+-- instance Observe a => Observe [a]
 
 instance Produce Integer where
   produce = produceArbitrary
