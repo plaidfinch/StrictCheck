@@ -17,6 +17,9 @@ instance (Consume a, Consume b) => Consume (a, b)
 instance (Consume a) => Consume [a]
 instance (Consume a) => Consume (Tree a)
 
+instance (Consume v) => Consume (Map k v) where
+  consume m = fields (fmap (consume . snd) (toList m))
+
 instance Observe ()
 instance (Observe a, Observe b) => Observe (a, b)
 instance Observe a => Observe [a]
