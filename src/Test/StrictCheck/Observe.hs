@@ -49,12 +49,16 @@ instance Functor PrettyDemand where
 -- The Observe typeclass --
 ---------------------------
 
-class Functor1 h where
-  fmap1 :: (forall x. f x -> g x) -> h f -> h g
-
-class (Functor1 (Demand a)) => Observe (a :: *) where
+class Observe (a :: *) where
   type Demand a :: (* -> *) -> *
   type Demand a = GDemand a
+
+  mapD :: (forall x. Observe x => f x -> g x)
+       -> Demand a f -> Demand a g
+  default mapD :: GObserve a
+               => (forall x. Observe x => f x -> g x)
+               -> Demand a f -> Demand a g
+  mapD = gMapD
 
   projectD :: (forall x. Observe x => x -> f x) -> a -> Demand a f
   default projectD :: GObserve a
@@ -62,19 +66,79 @@ class (Functor1 (Demand a)) => Observe (a :: *) where
                    -> a -> Demand a f
   projectD = gProjectD
 
-  embedD   :: (forall x. Observe x => f x -> x) -> Demand a f -> a
+  embedD :: (forall x. Observe x => f x -> x) -> Demand a f -> a
   default embedD :: GObserve a
                  => (forall x. Observe x => f x -> x)
                  -> Demand a f -> a
   embedD = gEmbedD
 
-  -- zipD     :: (forall x. f x -> g x -> h x) -> Demand a f -> Demand a g -> Demand a h
-  -- unzipD   :: (forall x. h x -> (f x, g x)) -> Demand a h -> (Demand a f, Demand a g)
+  unzipD :: (forall x. Observe x => h x -> (f x, g x))
+         -> Demand a h
+         -> (Demand a f, Demand a g)
 
 newtype Field (f :: * -> *) (a :: *) :: * where
   F :: f (Demand a (Field f)) -> Field f a
 
 deriving instance (Show (f (Demand a (Field f)))) => Show (Field f a)
+
+projectField :: forall a f. Observe a
+             => (forall x. x -> f x)
+             -> a -> Field f a
+projectField p a =
+  F (p (projectDemand a))
+    where
+      projectDemand :: a -> Demand a (Field f)
+      projectDemand a' = projectD (projectField p) a'
+
+embedField :: forall a f. Observe a
+           => (forall x. f x -> x)
+           -> Field f a -> a
+embedField e (F d) =
+  embedDemand (e d)
+  where
+    embedDemand :: Demand a (Field f) -> a
+    embedDemand d' = embedD (embedField e) d'
+
+
+-- | Convenience type for representing demands upon abstract structures with one
+-- type recursively-demanded type parameter (i.e. (Map k) or Seq)
+
+newtype WithFieldsOf h a f = WithFieldsOf (h (f a))
+
+mapWFO :: (Functor h, Observe a)
+       => (forall x. Observe x => f x -> g x)
+       -> WithFieldsOf h a f
+       -> WithFieldsOf h a g
+mapWFO t (WithFieldsOf x) = (WithFieldsOf (fmap t x))
+
+projectWFO :: (Functor h, Observe a)
+           => (forall x. Observe x => x -> f x)
+           -> h a -> WithFieldsOf h a f
+projectWFO p a = WithFieldsOf (fmap p a)
+
+embedWFO :: (Functor h, Observe a)
+         => (forall x. Observe x => f x -> x)
+        -> WithFieldsOf h a f -> h a
+embedWFO e (WithFieldsOf m) = fmap e m
+
+-- foldD :: forall a f g. Observe a
+--       => (forall x h. Demand x h -> g x)
+--       -> Demand a f -> g a
+
+
+------------------------------------------------------
+-- Observing demand behavior of arbitrary functions --
+------------------------------------------------------
+
+-- | Force a value in some applicative context. This is useful for ensuring that
+-- values are evaluated in the correct order inside of unsafePerformIO blocks.
+evaluate :: Applicative f => a -> f ()
+evaluate !_ = pure ()
+
+
+---------------------------------------------------
+-- Generic implementation of the Observe methods --
+---------------------------------------------------
 
 newtype GDemand a f =
   GD (NS (NP f) (Code a))
@@ -87,9 +151,11 @@ type GObserve a =
   , AllF SListI (Code a)
   )
 
-instance (SListI (Code a), AllF SListI (Code a)) => Functor1 (GDemand a) where
-  fmap1 t (GD sop) =
-    GD $ unSOP $ hliftA t (SOP sop)
+gMapD :: GObserve a
+      => (forall x. Observe x => f x -> g x)
+      -> Demand a f -> Demand a g
+gMapD t (GD sop) =
+  GD $ unSOP $ hcliftA (Proxy :: Proxy Observe) t (SOP sop)
 
 gProjectD :: GObserve a
           => (forall x. Observe x => x -> f x)
@@ -117,62 +183,3 @@ deriving instance ( SListI (Code a)
 deriving instance ( SListI (Code a)
                   , AllF (Compose NFData (NP f)) (Code a)
                   ) => NFData (GDemand a f)
-
-type family Demands
-
-projectField :: forall a f. Observe a
-             => (forall x. x -> f x)
-             -> a -> Field f a
-projectField p a =
-  F (p (projectDemand a))
-    where
-      projectDemand :: a -> Demand a (Field f)
-      projectDemand a' = projectD (projectField p) a'
-
-embedField :: forall a f. Observe a
-           => (forall x. f x -> x)
-           -> Field f a -> a
-embedField e (F d) =
-  embedDemand (e d)
-  where
-    embedDemand :: Demand a (Field f) -> a
-    embedDemand d' = embedD (embedField e) d'
-
-
-newtype WithFieldsOf f a field = WithFieldsOf (f (field a))
-
-instance Functor f => Functor1 (f `WithFieldsOf` a) where
-  fmap1 t (WithFieldsOf f) = WithFieldsOf (fmap t f)
-
--- foldD :: forall a f g. Observe a
---       => (forall x h. Demand x h -> g x)
---       -> Demand a f -> g a
-
--- instance Observe () where
---   type Demand () = Proxy
---   mapD     _ _   = Proxy
---   projectD _ _   = Proxy
---   embedD   _ _   = ()
-
--- instance (Observe a, Observe b) => Observe (Either a b) where
---   mapD f (L a) = L (mapD @a f a)
---   mapD f (R b) = R (mapD @b f b)
---   projectD p (Left a)  = L (projectD p a)
---   projectD p (Right b) = R (projectD p b)
---   embedD e (L a) = Left  (embedD e a)
---   embedD e (R b) = Right (embedD e b)
-
-
-------------------------------------------------------
--- Observing demand behavior of arbitrary functions --
-------------------------------------------------------
-
--- | Force a value in some applicative context. This is useful for ensuring that
--- values are evaluated in the correct order inside of unsafePerformIO blocks.
-evaluate :: Applicative f => a -> f ()
-evaluate !_ = pure ()
-
-
----------------------------------------------------
--- Generic implementation of the Observe methods --
----------------------------------------------------

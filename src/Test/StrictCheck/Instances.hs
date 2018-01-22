@@ -11,6 +11,7 @@ import Test.QuickCheck
 
 import Data.Tree
 import Data.Map
+import Data.Sequence
 
 instance Consume ()
 instance (Consume a, Consume b) => Consume (a, b)
@@ -18,7 +19,7 @@ instance (Consume a) => Consume [a]
 instance (Consume a) => Consume (Tree a)
 
 instance (Consume v) => Consume (Map k v) where
-  consume m = fields (fmap (consume . snd) (toList m))
+  consume = fields . fmap (consume . snd) . Data.Map.toList
 
 instance Observe ()
 instance (Observe a, Observe b) => Observe (a, b)
@@ -28,6 +29,13 @@ instance (Observe a, Observe b) => Observe (Either a b)
 
 instance (Observe v) => Observe (Map k v) where
   type Demand (Map k v) = Map k `WithFieldsOf` v
+  mapD     = mapWFO
+  projectD = projectWFO
+  embedD   = embedWFO
+
+instance Observe a => Observe (Seq a) where
+  type Demand (Seq a) = Seq `WithFieldsOf` a
+  mapD = mapWFO
   projectD p m = WithFieldsOf (fmap p m)
   embedD e (WithFieldsOf m) = fmap e m
 
