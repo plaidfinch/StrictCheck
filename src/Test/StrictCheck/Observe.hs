@@ -35,6 +35,21 @@ data Thunk a = E !a | T
 -- For brevity, some abbreviations for repeated signatures --
 -------------------------------------------------------------
 
+type FMap f = forall x y. (x -> y) -> f x -> f y
+
+type Mapping c h f g =
+  (forall x. c x => f x -> g x) -> h f -> h g
+
+type Projecting c h f a =
+  (forall x. c x => x -> f x) -> a -> h f
+
+type Embedding c h f a =
+  (forall x. c x => f x -> x) -> h f -> a
+
+type Unzipping c z f g h =
+  (forall x. c x => f x -> (g x, h x))
+  -> z f -> (z g, z h)
+
 data PrettyDemand string =
   Constr string
     (Either [Thunk (PrettyDemand string)]
@@ -57,30 +72,20 @@ class Observe (a :: *) where
   type Demand a :: (* -> *) -> *
   type Demand a = GDemand a
 
-  mapD :: (forall x. Observe x => f x -> g x)
-       -> Demand a f -> Demand a g
-  default mapD :: GObserve a
-               => (forall x. Observe x => f x -> g x)
-               -> Demand a f -> Demand a g
+  mapD :: Mapping Observe (Demand a) f g
+  default mapD :: GObserve a => Mapping Observe (Demand a) f g
   mapD = gMapD
 
-  projectD :: (forall x. Observe x => x -> f x) -> a -> Demand a f
-  default projectD :: GObserve a
-                   => (forall x. Observe x => x -> f x)
-                   -> a -> Demand a f
+  projectD :: Projecting Observe (Demand a) f a
+  default projectD :: GObserve a => Projecting Observe (Demand a) f a
   projectD = gProjectD
 
-  embedD :: (forall x. Observe x => f x -> x) -> Demand a f -> a
-  default embedD :: GObserve a
-                 => (forall x. Observe x => f x -> x)
-                 -> Demand a f -> a
+  embedD :: Embedding Observe (Demand a) f a
+  default embedD :: GObserve a => Embedding Observe (Demand a) f a
   embedD = gEmbedD
 
-  unzipD :: (forall x. Observe x => f x -> (g x, h x))
-         -> Demand a f -> (Demand a g, Demand a h)
-  default unzipD :: GObserve a
-                 => (forall x. Observe x => f x -> (g x, h x))
-                 -> Demand a f -> (Demand a g, Demand a h)
+  unzipD :: Unzipping Observe (Demand a) f g h
+  default unzipD :: GObserve a => Unzipping Observe (Demand a) f g h
   unzipD = gUnzipD
 
 newtype Field (f :: * -> *) (a :: *) :: * where
@@ -117,28 +122,42 @@ unzipField split (F df) =
 -- | Convenience type for representing demands upon abstract structures with one
 -- type recursively-demanded type parameter (i.e. (Map k) or Seq)
 
-newtype WithFieldsOf h a f = WFO (h (f a))
+newtype Containing h a f =
+  Container (h (f a))
+  deriving (Eq, Ord, Show, GHC.Generic, NFData)
 
-mapWFO :: (Functor h, Observe a)
-       => (forall x. Observe x => f x -> g x)
-       -> WithFieldsOf h a f
-       -> WithFieldsOf h a g
-mapWFO t (WFO x) = WFO (fmap t x)
+mapContaining'     :: (Observe a) => FMap h
+  -> Mapping Observe (Containing h a) f g
+projectContaining' :: (Observe a) => FMap h
+  -> Projecting Observe (Containing h a) f (h a)
+embedContaining'   :: (Observe a) => FMap h
+  -> Embedding Observe (Containing h a) f (h a)
+unzipContaining'   :: (Observe a) => FMap z
+  -> Unzipping Observe (Containing z a) f g h
 
-projectWFO :: (Functor h, Observe a)
-           => (forall x. Observe x => x -> f x)
-           -> h a -> WithFieldsOf h a f
-projectWFO p a = WFO (fmap p a)
+mapContaining' m t (Container x) = Container (m t x)
 
-embedWFO :: (Functor h, Observe a)
-         => (forall x. Observe x => f x -> x)
-         -> WithFieldsOf h a f -> h a
-embedWFO e (WFO m) = fmap e m
+projectContaining' m p a = Container (m p a)
 
--- foldD :: forall a f g. Observe a
---       => (forall x h. Demand x h -> g x)
---       -> Demand a f -> g a
+embedContaining' m e (Container x) = m e x
 
+unzipContaining' m split (Container x) =
+  let paired = m split x
+  in (Container (m fst paired), Container (m snd paired))
+
+mapContaining     :: (Functor h, Observe a)
+  => Mapping Observe (Containing h a) f g
+projectContaining :: (Functor h, Observe a)
+  => Projecting Observe (Containing h a) f (h a)
+embedContaining   :: (Functor h, Observe a)
+  => Embedding Observe (Containing h a) f (h a)
+unzipContaining   :: (Functor z, Observe a)
+  => Unzipping Observe (Containing z a) f g h
+
+mapContaining     = mapContaining'     fmap
+projectContaining = projectContaining' fmap
+embedContaining   = embedContaining'   fmap
+unzipContaining   = unzipContaining'   fmap
 
 ------------------------------------------------------
 -- Observing demand behavior of arbitrary functions --
@@ -174,8 +193,8 @@ observe context function value =
   runIdentity $ do
     let (observable, observation) = entangleField value
         result = function observable
-    evaluate (context result)
-    evaluate (rnf observation)
+    !_ <- evaluate (context result)
+    !_ <- evaluate (rnf observation)
     return (result, observation)
 
 
