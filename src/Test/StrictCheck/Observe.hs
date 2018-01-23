@@ -2,9 +2,11 @@
   AllowAmbiguousTypes, UndecidableInstances, DefaultSignatures,
   TypeApplications, ScopedTypeVariables, FlexibleContexts, ConstraintKinds,
   DeriveFunctor, FlexibleInstances, StandaloneDeriving, DeriveGeneric,
-  DeriveAnyClass, TypeOperators, PolyKinds, DeriveDataTypeable #-}
+  DeriveAnyClass, TypeOperators, PolyKinds, DeriveDataTypeable,
+  PartialTypeSignatures #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
+{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 
 module Test.StrictCheck.Observe where
 
@@ -31,35 +33,6 @@ data Thunk a = E !a | T
   deriving (Eq, Ord, Show, Functor, GHC.Generic, NFData)
 
 
--------------------------------------------------------------
--- For brevity, some abbreviations for repeated signatures --
--------------------------------------------------------------
-
-type FMap f = forall x y. (x -> y) -> f x -> f y
-
-type Mapping c h f g =
-  (forall x. c x => f x -> g x) -> h f -> h g
-
-type Projecting c h f a =
-  (forall x. c x => x -> f x) -> a -> h f
-
-type Embedding c h f a =
-  (forall x. c x => f x -> x) -> h f -> a
-
-data PrettyDemand string =
-  Constr string
-    (Either [Thunk (PrettyDemand string)]
-            [(string, Thunk (PrettyDemand string))])
-  deriving (Eq, Ord, Show)
-
-instance Functor PrettyDemand where
-  fmap f (Constr name (Left thunks)) =
-    Constr (f name) (Left $ fmap (fmap (fmap f)) thunks)
-  fmap f (Constr name (Right fields)) =
-    Constr (f name)
-           (Right $ (fmap (\(a, thunk) -> (f a, fmap (fmap f) thunk))) fields)
-
-
 ---------------------------
 -- The Observe typeclass --
 ---------------------------
@@ -68,17 +41,27 @@ class Typeable a => Observe (a :: *) where
   type Demand a :: (* -> *) -> *
   type Demand a = GDemand a
 
-  mapD :: Mapping Observe (Demand a) f g
-  default mapD :: GObserve a => Mapping Observe (Demand a) f g
+  mapD :: (forall x. Observe x => f x -> g x)
+       -> Demand a f -> Demand a g
+  default mapD :: GObserve a
+    => (forall x. Observe x => f x -> g x)
+    -> Demand a f -> Demand a g
   mapD = gMapD
 
-  projectD :: Projecting Observe (Demand a) f a
-  default projectD :: GObserve a => Projecting Observe (Demand a) f a
+  projectD :: (forall x. Observe x => x -> f x) -> a -> Demand a f
+  default projectD :: GObserve a
+    => (forall x. Observe x => x -> f x) -> a -> Demand a f
   projectD = gProjectD
 
-  embedD :: Embedding Observe (Demand a) f a
-  default embedD :: GObserve a => Embedding Observe (Demand a) f a
+  embedD :: (forall x. Observe x => f x -> x) -> Demand a f -> a
+  default embedD :: GObserve a
+    => (forall x. Observe x => f x -> x) -> Demand a f -> a
   embedD = gEmbedD
+
+
+-----------------------------------------------
+-- Introducing recursion into demands: Field --
+-----------------------------------------------
 
 newtype Field (f :: * -> *) (a :: *) :: * where
   F :: f (Demand a (Field f)) -> Field f a
@@ -96,12 +79,6 @@ unfoldD :: forall a f g. (Functor g, Observe a)
         -> f a -> Field g a
 unfoldD coalg = F . fmap (mapD @a (unfoldD coalg)) . coalg
 
-deriving instance GHC.Generic (Field f a)
-deriving instance (Eq     (f (Demand a (Field f)))) => Eq     (Field f a)
-deriving instance (Ord    (f (Demand a (Field f)))) => Ord    (Field f a)
-deriving instance (Show   (f (Demand a (Field f)))) => Show   (Field f a)
-deriving instance (NFData (f (Demand a (Field f)))) => NFData (Field f a)
-
 projectField :: forall a f. (Functor f, Observe a)
              => (forall x. x -> f x)
              -> a -> Field f a
@@ -117,45 +94,30 @@ unzipField :: forall a f g h.
            => (forall x. f x -> (g x, h x))
            -> Field f a -> (Field g a, Field h a)
 unzipField split =
-  getBoth . foldD (go . split)
+  getBoth . foldD (Both . crunch . split)
   where
-    go :: forall x. Observe x =>
-      ( g (Demand x (Both (Field g) (Field h)))
-      , h (Demand x (Both (Field g) (Field h))) )
-      -> Both (Field g) (Field h) x
-    go = Both . bimap F F
-       . bimap (fmap (mapD @x fstBoth))
-               (fmap (mapD @x sndBoth))
+    crunch :: forall x. Observe x
+           => (g _, h _) -> (Field g x, Field h x)
+    crunch =
+      bimap (F . fmap (mapD @x fstBoth))
+            (F . fmap (mapD @x sndBoth))
 
 
--- | Convenience type for representing demands upon abstract structures with one
--- type recursively-demanded type parameter (i.e. (Map k) or Seq)
+-----------------------------
+-- The Both type is useful --
+-----------------------------
 
-newtype Containing h a f =
-  Container (h (f a))
-  deriving (Eq, Ord, Show, GHC.Generic, NFData)
+newtype Both f g a = Both (f a, g a)
 
-mapContaining'     :: (Observe a)
-  => FMap h -> Mapping Observe (Containing h a) f g
-projectContaining' :: (Observe a)
-  => FMap h -> Projecting Observe (Containing h a) f (h a)
-embedContaining'   :: (Observe a)
-  => FMap h -> Embedding Observe (Containing h a) f (h a)
+getBoth :: Both f g a -> (f a, g a)
+getBoth (Both both) = both
 
-mapContaining'     m t (Container x) = Container (m t x)
-projectContaining' m p            x  = Container (m p x)
-embedContaining'   m e (Container x) =            m e x
+fstBoth :: Both f g a -> f a
+fstBoth (Both (fa, _)) = fa
 
-mapContaining     :: (Functor h, Observe a)
-  => Mapping Observe (Containing h a) f g
-projectContaining :: (Functor h, Observe a)
-  => Projecting Observe (Containing h a) f (h a)
-embedContaining   :: (Functor h, Observe a)
-  => Embedding Observe (Containing h a) f (h a)
+sndBoth :: Both f g a -> g a
+sndBoth (Both (_, ga)) = ga
 
-mapContaining     = mapContaining'     fmap
-projectContaining = projectContaining' fmap
-embedContaining   = embedContaining'   fmap
 
 ------------------------------------------------------
 -- Observing demand behavior of arbitrary functions --
@@ -198,6 +160,30 @@ observe context function value =
 -- TODO: Implement n-ary observation
 
 
+-----------------------------
+-- Pretty-printing demands --
+-----------------------------
+
+data PrettyDemand string a =
+  Constr string
+    (Either [Thunk a]
+            [(string, Thunk a)])
+  deriving (Eq, Ord, Show)
+
+instance Functor (PrettyDemand string) where
+  fmap = second
+
+instance Bifunctor PrettyDemand where
+  first f (Constr    name  (Left fields)) =
+           Constr (f name) (Left fields)
+  first f (Constr    name (Right fields)) =
+           Constr (f name) (Right $ (fmap (first f)) fields)
+  second f (Constr name (Left fields)) =
+            Constr name (Left $ (fmap (fmap f)) fields)
+  second f (Constr name (Right fields)) =
+            Constr name (Right $ fmap (second (fmap f)) fields)
+
+
 ---------------------------------------------------
 -- Generic implementation of the Observe methods --
 ---------------------------------------------------
@@ -230,28 +216,16 @@ gEmbedD :: GObserve a
 gEmbedD e (GD d) =
   to (hcliftA (Proxy :: Proxy Observe) (I . e) (SOP d))
 
-gUnzipD :: forall a f g h. GObserve a
-        => (forall x. Observe x => f x -> (g x, h x))
-        -> Demand a f -> (Demand a g, Demand a h)
-gUnzipD split (GD d) =
-  let doubled =
-        hcliftA (Proxy :: Proxy Observe) splitBoth (SOP d)
-  in ( GD . unSOP $ hliftA fstBoth doubled
-     , GD . unSOP $ hliftA sndBoth doubled )
-  where
-    splitBoth :: forall x. Observe x => f x -> Both g h x
-    splitBoth fx = Both (split fx)
 
-newtype Both f g a = Both (f a, g a)
+--------------------------------------
+-- Deriving instances for things... --
+--------------------------------------
 
-getBoth :: Both f g a -> (f a, g a)
-getBoth (Both both) = both
-
-fstBoth :: Both f g a -> f a
-fstBoth (Both (fa, _)) = fa
-
-sndBoth :: Both f g a -> g a
-sndBoth (Both (_, ga)) = ga
+deriving instance GHC.Generic (Field f a)
+deriving instance (Eq     (f (Demand a (Field f)))) => Eq     (Field f a)
+deriving instance (Ord    (f (Demand a (Field f)))) => Ord    (Field f a)
+deriving instance (Show   (f (Demand a (Field f)))) => Show   (Field f a)
+deriving instance (NFData (f (Demand a (Field f)))) => NFData (Field f a)
 
 deriving instance GHC.Generic (GDemand a f)
 deriving instance ( SListI (Code a)

@@ -1,4 +1,4 @@
-{-# language TypeOperators, TypeFamilies #-}
+{-# language TypeOperators, TypeFamilies, DeriveGeneric, DeriveAnyClass, RankNTypes #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-unused-imports #-}
 
@@ -17,6 +17,32 @@ import qualified Data.Set as Set
 import Data.Foldable
 import Data.Sequence
 import Data.Typeable
+import qualified GHC.Generics as GHC
+import Control.DeepSeq
+
+-- | Convenience type for representing demands upon abstract structures with one
+-- type recursively-demanded type parameter (i.e. (Map k) or Seq)
+
+newtype Containing h a f =
+  Container (h (f a))
+  deriving (Eq, Ord, Show, GHC.Generic, NFData)
+
+mapContaining :: (Functor h, Observe a)
+  => (forall x. Observe x => f x -> g x)
+  -> Containing h a f -> Containing h a g
+
+projectContaining :: (Functor h, Observe a)
+  => (forall x. Observe x => x -> f x)
+  -> h a -> Containing h a f
+
+embedContaining :: (Functor h, Observe a)
+  => (forall x. Observe x => f x -> x)
+  -> Containing h a f -> h a
+
+mapContaining     t (Container x) = Container (fmap t x)
+projectContaining p            x  = Container (fmap p x)
+embedContaining   e (Container x) =            fmap e x
+
 
 instance Consume ()
 instance (Consume a, Consume b) => Consume (a, b)
