@@ -64,23 +64,23 @@ instance Observe a => Observe [a]
 instance Observe a => Observe (Maybe a)
 instance (Observe a, Observe b) => Observe (Either a b)
 
-instance (Observe v, Typeable k) => Observe (Map k v) where
-  type Demand (Map k v) = Map k `Containing` v
-  mapD     = mapContaining
-  projectD = projectContaining
-  embedD   = embedContaining
+-- instance (Observe v, Typeable k) => Observe (Map k v) where
+--   type Demand (Map k v) = Map k `Containing` v
+--   mapD     = mapContaining
+--   projectD = projectContaining
+--   embedD   = embedContaining
 
-instance Observe a => Observe (Seq a) where
-  type Demand (Seq a) = Seq `Containing` a
-  mapD     = mapContaining
-  projectD = projectContaining
-  embedD   = embedContaining
+-- instance Observe a => Observe (Seq a) where
+--   type Demand (Seq a) = Seq `Containing` a
+--   mapD     = mapContaining
+--   projectD = projectContaining
+--   embedD   = embedContaining
 
-instance (Ord a, Observe a) => Observe (Set a) where
-  type Demand (Set a) = [] `Containing` a
-  mapD       = mapContaining
-  projectD p = projectContaining p . Set.toList
-  embedD   e = Set.fromList . embedContaining e
+-- instance (Ord a, Observe a) => Observe (Set a) where
+--   type Demand (Set a) = [] `Containing` a
+--   mapD       = mapContaining
+--   projectD p = projectContaining p . Set.toList
+--   embedD   e = Set.fromList . embedContaining e
 
 instance Produce Integer where
   produce = produceArbitrary

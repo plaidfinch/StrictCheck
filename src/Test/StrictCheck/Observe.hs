@@ -6,7 +6,7 @@
   PartialTypeSignatures #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
-{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
+--{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 
 module Test.StrictCheck.Observe where
 
@@ -23,6 +23,7 @@ import Generics.SOP.Constraint
 import Control.DeepSeq
 import Data.Bifunctor
 import Control.Monad.Identity
+import Data.Fix
 
 
 --------------------------------------------------------
@@ -57,6 +58,11 @@ class Typeable a => Observe (a :: *) where
   default embedD :: GObserve a
     => (forall x. Observe x => f x -> x) -> Demand a f -> a
   embedD = gEmbedD
+
+  prettyD :: Demand a (K (f x)) -> PrettyDemand f QConstructorName x
+  default prettyD :: (GObserve a, HasDatatypeInfo a)
+    => Demand a (K (f x)) -> PrettyDemand f QConstructorName x
+  prettyD = gPrettyD
 
 
 -----------------------------------------------
@@ -97,10 +103,21 @@ unzipField split =
   getBoth . foldD (Both . crunch . split)
   where
     crunch :: forall x. Observe x
-           => (g _, h _) -> (Field g x, Field h x)
+           => ( g (Demand x (Both (Field g) (Field h)))
+              , h (Demand x (Both (Field g) (Field h))) )
+           -> (Field g x, Field h x)
     crunch =
       bimap (F . fmap (mapD @x fstBoth))
             (F . fmap (mapD @x sndBoth))
+
+prettyField :: forall a f. (Observe a, Functor f) => Field f a
+            -> f (Fix (PrettyDemand f QConstructorName))
+prettyField = unK . foldD oneLevel
+  where
+    oneLevel :: forall x. Observe x
+             => f (Demand x (K (f (Fix (PrettyDemand f QConstructorName)))))
+             -> K (f (Fix (PrettyDemand f QConstructorName))) x
+    oneLevel = K . fmap @f (Fix . prettyD @x)
 
 
 -----------------------------
@@ -164,16 +181,14 @@ observe context function value =
 -- Pretty-printing demands --
 -----------------------------
 
-data PrettyDemand string a =
-  Constr string
-    (Either [Thunk a]
-            [(string, Thunk a)])
+data PrettyDemand f string a =
+  Constr string (Either [f a] [(string, f a)])
   deriving (Eq, Ord, Show)
 
-instance Functor (PrettyDemand string) where
+instance Functor f => Functor (PrettyDemand f string) where
   fmap = second
 
-instance Bifunctor PrettyDemand where
+instance Functor f => Bifunctor (PrettyDemand f) where
   first f (Constr    name  (Left fields)) =
            Constr (f name) (Left fields)
   first f (Constr    name (Right fields)) =
@@ -183,6 +198,7 @@ instance Bifunctor PrettyDemand where
   second f (Constr name (Right fields)) =
             Constr name (Right $ fmap (second (fmap f)) fields)
 
+type QConstructorName = (ModuleName, DatatypeName, ConstructorName)
 
 ---------------------------------------------------
 -- Generic implementation of the Observe methods --
@@ -216,6 +232,40 @@ gEmbedD :: GObserve a
 gEmbedD e (GD d) =
   to (hcliftA (Proxy :: Proxy Observe) (I . e) (SOP d))
 
+gPrettyD :: forall a x f. (HasDatatypeInfo a, GObserve a)
+         => Demand a (K (f x))
+         -> PrettyDemand f QConstructorName x
+gPrettyD (GD demand) =
+  case info of
+    ADT m d cs ->
+      prettyC m d demand cs
+    Newtype m d c ->
+      prettyC m d demand (c :* Nil)
+  where
+    info = datatypeInfo (Proxy :: Proxy a)
+
+    prettyC :: forall as. ModuleName -> DatatypeName
+            -> NS (NP (K (f x))) as
+            -> NP ConstructorInfo as
+            -> PrettyDemand f QConstructorName x
+    prettyC m d subDemand constructors =
+      case (subDemand, constructors) of
+        (Z demandFields, c :* _) ->
+          case c of
+            Constructor name ->
+              Constr (m, d, name) . Left $
+                hcollapse demandFields
+            Infix name _ _ ->
+              Constr (m, d, name) . Left $
+                hcollapse demandFields
+            Record name fieldsInfo ->
+              Constr (m, d, name) . Right $
+                zip ( hcollapse
+                    . hliftA (\(FieldInfo f) -> K (m, d, f))
+                    $ fieldsInfo )
+                    (hcollapse demandFields)
+        (S another, _ :* different) ->
+          prettyC m d another different
 
 --------------------------------------
 -- Deriving instances for things... --
