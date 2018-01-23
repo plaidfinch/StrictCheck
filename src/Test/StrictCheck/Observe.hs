@@ -159,7 +159,7 @@ entangle a =
                   evaluate a
                   writeIORef ref (E a)
                   return a)
-            , unsafePerformIO (readIORef ref) )
+             , unsafePerformIO (readIORef ref) )
 
 {-# NOINLINE entangleField #-}
 entangleField :: Observe a => a -> (a, Field Thunk a)
