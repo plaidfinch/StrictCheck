@@ -18,6 +18,7 @@ import Data.Foldable
 import Data.Sequence
 import Data.Typeable
 import qualified GHC.Generics as GHC
+import Generics.SOP
 import Control.DeepSeq
 
 -- | Convenience type for representing demands upon abstract structures with one
@@ -42,7 +43,7 @@ embedContaining :: (Functor h, Observe a)
 mapContaining     t (Container x) = Container (fmap t x)
 projectContaining p            x  = Container (fmap p x)
 embedContaining   e (Container x) =            fmap e x
-
+-- prettyContaining  n (Container x) = Constr n (Left (fmap unK (toList x)))
 
 instance Consume ()
 instance (Consume a, Consume b) => Consume (a, b)
@@ -64,23 +65,28 @@ instance Observe a => Observe [a]
 instance Observe a => Observe (Maybe a)
 instance (Observe a, Observe b) => Observe (Either a b)
 
--- instance (Observe v, Typeable k) => Observe (Map k v) where
---   type Demand (Map k v) = Map k `Containing` v
---   mapD     = mapContaining
---   projectD = projectContaining
---   embedD   = embedContaining
+instance (Observe v, Typeable k) => Observe (Map k v) where
+  type Demand (Map k v) = Map k `Containing` v
+  mapD     = mapContaining
+  projectD = projectContaining
+  embedD   = embedContaining
+  prettyD (Container m) =
+    Constr ("Data.Map", "Map", "fromList")
+           (Left (fmap unK (toList m))) -- TODO: how to deal with keys?
 
--- instance Observe a => Observe (Seq a) where
---   type Demand (Seq a) = Seq `Containing` a
---   mapD     = mapContaining
---   projectD = projectContaining
---   embedD   = embedContaining
+instance Observe a => Observe (Seq a) where
+  type Demand (Seq a) = Seq `Containing` a
+  mapD     = mapContaining
+  projectD = projectContaining
+  embedD   = embedContaining
+  prettyD  = undefined --prettyContaining ("Data.Sequence", "Seq", "fromList")
 
--- instance (Ord a, Observe a) => Observe (Set a) where
---   type Demand (Set a) = [] `Containing` a
---   mapD       = mapContaining
---   projectD p = projectContaining p . Set.toList
---   embedD   e = Set.fromList . embedContaining e
+instance (Ord a, Observe a) => Observe (Set a) where
+  type Demand (Set a) = [] `Containing` a
+  mapD       = mapContaining
+  projectD p = projectContaining p . Set.toList
+  embedD   e = Set.fromList . embedContaining e
+  prettyD    = undefined
 
 instance Produce Integer where
   produce = produceArbitrary
