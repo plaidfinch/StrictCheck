@@ -43,21 +43,18 @@ instance (Observe v, Typeable k) => Observe (Map k v) where
   mapD     = mapContaining
   projectD = projectContaining
   embedD   = embedContaining
-  unzipD   = unzipContaining
 
 instance Observe a => Observe (Seq a) where
   type Demand (Seq a) = Seq `Containing` a
   mapD     = mapContaining
   projectD = projectContaining
   embedD   = embedContaining
-  unzipD   = unzipContaining
 
 instance (Ord a, Observe a) => Observe (Set a) where
   type Demand (Set a) = [] `Containing` a
   mapD       = mapContaining
   projectD p = projectContaining p . Set.toList
   embedD   e = Set.fromList . embedContaining e
-  unzipD     = unzipContaining
 
 instance Produce Integer where
   produce = produceArbitrary

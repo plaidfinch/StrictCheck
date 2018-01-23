@@ -46,10 +46,6 @@ type Projecting c h f a =
 type Embedding c h f a =
   (forall x. c x => f x -> x) -> h f -> a
 
-type Unzipping c z f g h =
-  (forall x. c x => f x -> (g x, h x))
-  -> z f -> (z g, z h)
-
 data PrettyDemand string =
   Constr string
     (Either [Thunk (PrettyDemand string)]
@@ -84,10 +80,6 @@ class Typeable a => Observe (a :: *) where
   default embedD :: GObserve a => Embedding Observe (Demand a) f a
   embedD = gEmbedD
 
-  unzipD :: Unzipping Observe (Demand a) f g h
-  default unzipD :: GObserve a => Unzipping Observe (Demand a) f g h
-  unzipD = gUnzipD
-
 newtype Field (f :: * -> *) (a :: *) :: * where
   F :: f (Demand a (Field f)) -> Field f a
 
@@ -114,24 +106,26 @@ projectField :: forall a f. (Functor f, Observe a)
              => (forall x. x -> f x)
              -> a -> Field f a
 projectField p = unfoldD (fmap (projectD p)) . p
--- projectField p a =
---   F (p (projectD (projectField p) a))
 
 embedField :: forall a f. (Functor f, Observe a)
            => (forall x. f x -> x)
            -> Field f a -> a
 embedField e = e . foldD (fmap (embedD e))
--- embedField e (F d) =
---   embedD (embedField e) (e d)
 
 unzipField :: forall a f g h.
            (Observe a, Functor f, Functor g, Functor h)
            => (forall x. f x -> (g x, h x))
            -> Field f a -> (Field g a, Field h a)
-unzipField split (F df) =
-  let (dg, dh) =
-        split (unzipD @a (unzipField split) <$> df)
-  in (F (fmap fst dg), F (fmap snd dh))
+unzipField split =
+  getBoth . foldD (go . split)
+  where
+    go :: forall x. Observe x =>
+      ( g (Demand x (Both (Field g) (Field h)))
+      , h (Demand x (Both (Field g) (Field h))) )
+      -> Both (Field g) (Field h) x
+    go = Both . bimap F F
+       . bimap (fmap (mapD @x fstBoth))
+               (fmap (mapD @x sndBoth))
 
 
 -- | Convenience type for representing demands upon abstract structures with one
@@ -147,16 +141,10 @@ projectContaining' :: (Observe a)
   => FMap h -> Projecting Observe (Containing h a) f (h a)
 embedContaining'   :: (Observe a)
   => FMap h -> Embedding Observe (Containing h a) f (h a)
-unzipContaining'   :: (Observe a)
-  => FMap z -> Unzipping Observe (Containing z a) f g h
 
 mapContaining'     m t (Container x) = Container (m t x)
 projectContaining' m p            x  = Container (m p x)
 embedContaining'   m e (Container x) =            m e x
-
-unzipContaining' m split (Container x) =
-  let paired = m split x
-  in (Container (m fst paired), Container (m snd paired))
 
 mapContaining     :: (Functor h, Observe a)
   => Mapping Observe (Containing h a) f g
@@ -164,13 +152,10 @@ projectContaining :: (Functor h, Observe a)
   => Projecting Observe (Containing h a) f (h a)
 embedContaining   :: (Functor h, Observe a)
   => Embedding Observe (Containing h a) f (h a)
-unzipContaining   :: (Functor z, Observe a)
-  => Unzipping Observe (Containing z a) f g h
 
 mapContaining     = mapContaining'     fmap
 projectContaining = projectContaining' fmap
 embedContaining   = embedContaining'   fmap
-unzipContaining   = unzipContaining'   fmap
 
 ------------------------------------------------------
 -- Observing demand behavior of arbitrary functions --
@@ -258,6 +243,9 @@ gUnzipD split (GD d) =
     splitBoth fx = Both (split fx)
 
 newtype Both f g a = Both (f a, g a)
+
+getBoth :: Both f g a -> (f a, g a)
+getBoth (Both both) = both
 
 fstBoth :: Both f g a -> f a
 fstBoth (Both (fa, _)) = fa
