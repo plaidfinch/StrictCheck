@@ -1,6 +1,6 @@
 {-# language TypeOperators, TypeFamilies #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-unused-imports #-}
 
 module Test.StrictCheck.Instances where
 
@@ -27,17 +27,17 @@ instance Observe a => Observe [a]
 instance Observe a => Observe (Maybe a)
 instance (Observe a, Observe b) => Observe (Either a b)
 
-instance (Observe v) => Observe (Map k v) where
-  type Demand (Map k v) = Map k `WithFieldsOf` v
-  mapD     = mapWFO
-  projectD = projectWFO
-  embedD   = embedWFO
+-- instance (Observe v) => Observe (Map k v) where
+--   type Demand (Map k v) = Map k `WithFieldsOf` v
+--   mapD     = mapWFO
+--   projectD = projectWFO
+--   embedD   = embedWFO
 
-instance Observe a => Observe (Seq a) where
-  type Demand (Seq a) = Seq `WithFieldsOf` a
-  mapD = mapWFO
-  projectD p m = WithFieldsOf (fmap p m)
-  embedD e (WithFieldsOf m) = fmap e m
+-- instance Observe a => Observe (Seq a) where
+--   type Demand (Seq a) = Seq `WithFieldsOf` a
+--   mapD     = mapWFO
+--   projectD = projectWFO
+--   embedD   = embedWFO
 
 instance Produce Integer where
   produce = produceArbitrary
