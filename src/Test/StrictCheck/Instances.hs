@@ -16,6 +16,7 @@ import Data.Set hiding ( toList, map )
 import qualified Data.Set as Set
 import Data.Foldable
 import Data.Sequence
+import Data.Typeable
 
 instance Consume ()
 instance (Consume a, Consume b) => Consume (a, b)
@@ -37,7 +38,7 @@ instance Observe a => Observe [a]
 instance Observe a => Observe (Maybe a)
 instance (Observe a, Observe b) => Observe (Either a b)
 
-instance (Observe v) => Observe (Map k v) where
+instance (Observe v, Typeable k) => Observe (Map k v) where
   type Demand (Map k v) = Map k `Containing` v
   mapD     = mapContaining
   projectD = projectContaining

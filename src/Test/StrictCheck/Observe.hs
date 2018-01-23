@@ -68,7 +68,7 @@ instance Functor PrettyDemand where
 -- The Observe typeclass --
 ---------------------------
 
-class Observe (a :: *) where
+class Typeable a => Observe (a :: *) where
   type Demand a :: (* -> *) -> *
   type Demand a = GDemand a
 
@@ -91,23 +91,38 @@ class Observe (a :: *) where
 newtype Field (f :: * -> *) (a :: *) :: * where
   F :: f (Demand a (Field f)) -> Field f a
 
+unF :: Field f a -> f (Demand a (Field f))
+unF (F df) = df
+
+foldD :: forall a f g. (Functor f, Observe a)
+      => (forall x. Observe x => f (Demand x g) -> g x)
+      -> Field f a -> g a
+foldD alg = alg . fmap (mapD @a (foldD alg)) . unF
+
+unfoldD :: forall a f g. (Functor g, Observe a)
+        => (forall x. Observe x => f x -> g (Demand x f))
+        -> f a -> Field g a
+unfoldD coalg = F . fmap (mapD @a (unfoldD coalg)) . coalg
+
 deriving instance GHC.Generic (Field f a)
 deriving instance (Eq     (f (Demand a (Field f)))) => Eq     (Field f a)
 deriving instance (Ord    (f (Demand a (Field f)))) => Ord    (Field f a)
 deriving instance (Show   (f (Demand a (Field f)))) => Show   (Field f a)
 deriving instance (NFData (f (Demand a (Field f)))) => NFData (Field f a)
 
-projectField :: forall a f. Observe a
+projectField :: forall a f. (Functor f, Observe a)
              => (forall x. x -> f x)
              -> a -> Field f a
-projectField p a =
-  F (p (projectD (projectField p) a))
+projectField p = unfoldD (fmap (projectD p)) . p
+-- projectField p a =
+--   F (p (projectD (projectField p) a))
 
-embedField :: forall a f. Observe a
+embedField :: forall a f. (Functor f, Observe a)
            => (forall x. f x -> x)
            -> Field f a -> a
-embedField e (F d) =
-  embedD (embedField e) (e d)
+embedField e = e . foldD (fmap (embedD e))
+-- embedField e (F d) =
+--   embedD (embedField e) (e d)
 
 unzipField :: forall a f g h.
            (Observe a, Functor f, Functor g, Functor h)
@@ -126,20 +141,18 @@ newtype Containing h a f =
   Container (h (f a))
   deriving (Eq, Ord, Show, GHC.Generic, NFData)
 
-mapContaining'     :: (Observe a) => FMap h
-  -> Mapping Observe (Containing h a) f g
-projectContaining' :: (Observe a) => FMap h
-  -> Projecting Observe (Containing h a) f (h a)
-embedContaining'   :: (Observe a) => FMap h
-  -> Embedding Observe (Containing h a) f (h a)
-unzipContaining'   :: (Observe a) => FMap z
-  -> Unzipping Observe (Containing z a) f g h
+mapContaining'     :: (Observe a)
+  => FMap h -> Mapping Observe (Containing h a) f g
+projectContaining' :: (Observe a)
+  => FMap h -> Projecting Observe (Containing h a) f (h a)
+embedContaining'   :: (Observe a)
+  => FMap h -> Embedding Observe (Containing h a) f (h a)
+unzipContaining'   :: (Observe a)
+  => FMap z -> Unzipping Observe (Containing z a) f g h
 
-mapContaining' m t (Container x) = Container (m t x)
-
-projectContaining' m p a = Container (m p a)
-
-embedContaining' m e (Container x) = m e x
+mapContaining'     m t (Container x) = Container (m t x)
+projectContaining' m p            x  = Container (m p x)
+embedContaining'   m e (Container x) =            m e x
 
 unzipContaining' m split (Container x) =
   let paired = m split x
@@ -175,7 +188,7 @@ entangle a =
     ref <- newIORef T
     return . unsafePerformIO $ do
       return ( (unsafePerformIO $ do
-                  evaluate a
+                  !_ <- evaluate a
                   writeIORef ref (E a)
                   return a)
              , unsafePerformIO (readIORef ref) )
@@ -196,6 +209,8 @@ observe context function value =
     !_ <- evaluate (context result)
     !_ <- evaluate (rnf observation)
     return (result, observation)
+
+-- TODO: Implement n-ary observation
 
 
 ---------------------------------------------------
