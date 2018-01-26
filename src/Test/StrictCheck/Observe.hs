@@ -11,7 +11,7 @@
 module Test.StrictCheck.Observe where
 
 import Control.Exception hiding ( evaluate )
-import Data.Typeable
+-- import Data.Typeable
 import Data.IORef
 import System.IO.Unsafe
 
@@ -24,6 +24,7 @@ import Control.DeepSeq
 import Data.Bifunctor
 import Control.Monad.Identity
 import Data.Fix
+import Type.Reflection
 
 
 --------------------------------------------------------
@@ -42,13 +43,6 @@ class Typeable a => Observe (a :: *) where
   type Demand a :: (* -> *) -> *
   type Demand a = GDemand a
 
-  mapD :: (forall x. Observe x => f x -> g x)
-       -> Demand a f -> Demand a g
-  default mapD :: GObserve a
-    => (forall x. Observe x => f x -> g x)
-    -> Demand a f -> Demand a g
-  mapD = gMapD
-
   projectD :: (forall x. Observe x => x -> f x) -> a -> Demand a f
   default projectD :: GObserve a
     => (forall x. Observe x => x -> f x) -> a -> Demand a f
@@ -59,10 +53,45 @@ class Typeable a => Observe (a :: *) where
     => (forall x. Observe x => f x -> x) -> Demand a f -> a
   embedD = gEmbedD
 
-  prettyD :: Demand a (K (f x)) -> PrettyDemand f QConstructorName x
-  default prettyD :: (GObserve a, HasDatatypeInfo a)
-    => Demand a (K (f x)) -> PrettyDemand f QConstructorName x
-  prettyD = gPrettyD
+  withFieldsD
+    :: Demand a f
+    -> (forall xs. (SListI xs, AllF Observe xs)
+          => NP f xs
+          -> (forall g. NP g xs -> Demand a g)
+          -> result)
+    -> result
+  default withFieldsD
+    :: GObserve a
+    => Demand a f
+    -> (forall xs. (SListI xs, AllF Observe xs)
+          => NP f xs
+          -> (forall g. NP g xs -> Demand a g)
+          -> result)
+    -> result
+  withFieldsD = gWithFieldsD
+
+  -- prettyD :: Demand a g
+  --         -> [PrettyDemand f QConstructorName]
+  --         -> PrettyDemand f QConstructorName
+  -- default prettyD :: (GObserve a, HasDatatypeInfo a)
+  --   => Demand a f
+  --   -> [PrettyDemand f QConstructorName]
+  --   -> PrettyDemand f QConstructorName
+  -- prettyD = gPrettyD
+
+-- data FlatDemand (a :: *) (f :: * -> *) where
+--   FlatDemand
+--     :: (SingI xs, AllF Observe xs)
+--     => ExtraDemandInfo a xs
+--     -> NP f xs
+--     -> (forall g. ExtraDemandInfo a xs -> NP g xs -> Demand a g)
+--     -> FlatDemand a f
+
+mapD :: forall a f g. Observe a
+      => (forall x. Observe x => f x -> g x)
+      -> Demand a f -> Demand a g
+mapD t d = withFieldsD @a d $ \fields unflatten ->
+  unflatten (hcliftA (Proxy :: Proxy Observe) t fields)
 
 
 -----------------------------------------------
@@ -110,14 +139,14 @@ unzipField split =
       bimap (F . fmap (mapD @x fstBoth))
             (F . fmap (mapD @x sndBoth))
 
-prettyField :: forall a f. (Observe a, Functor f) => Field f a
-            -> f (Fix (PrettyDemand f QConstructorName))
-prettyField = unK . foldD oneLevel
-  where
-    oneLevel :: forall x. Observe x
-             => f (Demand x (K (f (Fix (PrettyDemand f QConstructorName)))))
-             -> K (f (Fix (PrettyDemand f QConstructorName))) x
-    oneLevel = K . fmap @f (Fix . prettyD @x)
+-- prettyField :: forall a f. (Observe a, Functor f) => Field f a
+--             -> f (Fix (PrettyDemand f QConstructorName))
+-- prettyField = unK . foldD oneLevel
+--   where
+--     oneLevel :: forall x. Observe x
+--              => f (Demand x (K (f (Fix (PrettyDemand f QConstructorName)))))
+--              -> K (f (Fix (PrettyDemand f QConstructorName))) x
+--     oneLevel = K . fmap @f (Fix . prettyD @x)
 
 
 -----------------------------
@@ -135,6 +164,8 @@ fstBoth (Both (fa, _)) = fa
 sndBoth :: Both f g a -> g a
 sndBoth (Both (_, ga)) = ga
 
+-- TODO: Replace this with Data.Functor.Product
+
 
 ------------------------------------------------------
 -- Observing demand behavior of arbitrary functions --
@@ -150,12 +181,10 @@ entangle :: forall a. a -> (a, Thunk a)
 entangle a =
   unsafePerformIO $ do
     ref <- newIORef T
-    return . unsafePerformIO $ do
-      return ( (unsafePerformIO $ do
-                  !_ <- evaluate a
-                  writeIORef ref (E a)
-                  return a)
-             , unsafePerformIO (readIORef ref) )
+    return ( (unsafePerformIO $ do
+                writeIORef ref (E a)
+                return a)
+           , unsafePerformIO (readIORef ref) )
 
 {-# NOINLINE entangleField #-}
 entangleField :: Observe a => a -> (a, Field Thunk a)
@@ -166,9 +195,9 @@ entangleField =
 
 observe :: (Observe a, NFData (Demand a (Field Thunk)))
         => (b -> ()) -> (a -> b) -> a -> (b, Field Thunk a)
-observe context function value =
+observe context function input =
   runIdentity $ do
-    let (observable, observation) = entangleField value
+    let (observable, observation) = entangleField input
         result = function observable
     !_ <- evaluate (context result)
     !_ <- evaluate (rnf observation)
@@ -181,24 +210,29 @@ observe context function value =
 -- Pretty-printing demands --
 -----------------------------
 
-data PrettyDemand f string a =
-  Constr string (Either [f a] [(string, f a)])
-  deriving (Eq, Ord, Show)
+-- data PrettyDemand f string =
+--     Algebraic string (Either [f (PrettyDemand f string)]
+--                            [(string, f (PrettyDemand f string))])
+--   | Abstract string [Either String (Int, f (PrettyDemand f string))]
+--   deriving (Eq, Ord, Show)
 
-instance Functor f => Functor (PrettyDemand f string) where
-  fmap = second
+-- instance Functor f => Functor (PrettyDemand f string) where
+--   fmap = second
 
-instance Functor f => Bifunctor (PrettyDemand f) where
-  first f (Constr    name  (Left fields)) =
-           Constr (f name) (Left fields)
-  first f (Constr    name (Right fields)) =
-           Constr (f name) (Right $ (fmap (first f)) fields)
-  second f (Constr name (Left fields)) =
-            Constr name (Left $ (fmap (fmap f)) fields)
-  second f (Constr name (Right fields)) =
-            Constr name (Right $ fmap (second (fmap f)) fields)
+-- instance Functor f => Bifunctor (PrettyDemand f) where
+--   first f (Constr    name  (Left fields)) =
+--            Constr (f name) (Left fields)
+--   first f (Constr    name (Right fields)) =
+--            Constr (f name) (Right $ (fmap (first f)) fields)
+--   second f (Constr name (Left fields)) =
+--             Constr name (Left $ (fmap (fmap f)) fields)
+--   second f (Constr name (Right fields)) =
+--             Constr name (Right $ fmap (second (fmap f)) fields)
 
 type QConstructorName = (ModuleName, DatatypeName, ConstructorName)
+
+-- TODO: More flexible pretty-type, to allow abstract types to be correctly
+-- represented and displayed
 
 ---------------------------------------------------
 -- Generic implementation of the Observe methods --
@@ -214,11 +248,11 @@ type GObserve a =
   , SListI (Code a)
   , AllF SListI (Code a) )
 
-gMapD :: GObserve a
-      => (forall x. Observe x => f x -> g x)
-      -> Demand a f -> Demand a g
-gMapD t (GD sop) =
-  GD $ unSOP $ hcliftA (Proxy :: Proxy Observe) t (SOP sop)
+-- gMapD :: GObserve a
+--       => (forall x. Observe x => f x -> g x)
+--       -> Demand a f -> Demand a g
+-- gMapD t (GD sop) =
+--   GD $ unSOP $ hcliftA (Proxy :: Proxy Observe) t (SOP sop)
 
 gProjectD :: GObserve a
           => (forall x. Observe x => x -> f x)
@@ -232,40 +266,65 @@ gEmbedD :: GObserve a
 gEmbedD e (GD d) =
   to (hcliftA (Proxy :: Proxy Observe) (I . e) (SOP d))
 
-gPrettyD :: forall a x f. (HasDatatypeInfo a, GObserve a)
-         => Demand a (K (f x))
-         -> PrettyDemand f QConstructorName x
-gPrettyD (GD demand) =
-  case info of
-    ADT m d cs ->
-      prettyC m d demand cs
-    Newtype m d c ->
-      prettyC m d demand (c :* Nil)
-  where
-    info = datatypeInfo (Proxy :: Proxy a)
+gWithFieldsD :: forall a f result. GObserve a
+  => Demand a f
+  -> (forall xs. (SListI xs, AllF Observe xs)
+        => NP f xs
+        -> (forall g. NP g xs -> Demand a g)
+        -> result)
+  -> result
+gWithFieldsD (GD d) k =
+  case splitProd d of
+    SP fields unflatten -> k fields (GD . unflatten)
 
-    prettyC :: forall as. ModuleName -> DatatypeName
-            -> NS (NP (K (f x))) as
-            -> NP ConstructorInfo as
-            -> PrettyDemand f QConstructorName x
-    prettyC m d subDemand constructors =
-      case (subDemand, constructors) of
-        (Z demandFields, c :* _) ->
-          case c of
-            Constructor name ->
-              Constr (m, d, name) . Left $
-                hcollapse demandFields
-            Infix name _ _ ->
-              Constr (m, d, name) . Left $
-                hcollapse demandFields
-            Record name fieldsInfo ->
-              Constr (m, d, name) . Right $
-                zip ( hcollapse
-                    . hliftA (\(FieldInfo f) -> K (m, d, f))
-                    $ fieldsInfo )
-                    (hcollapse demandFields)
-        (S another, _ :* different) ->
-          prettyC m d another different
+splitProd :: (AllF SListI xss, All2 Observe xss)
+          => NS (NP f) xss
+          -> SplitProd f xss
+splitProd (Z fields) = SP fields Z
+splitProd (S more)   =
+  case splitProd more of
+    SP fields unflatten -> SP fields (S . unflatten)
+
+data SplitProd f xss where
+  SP :: (SListI xs, AllF Observe xs)
+     => NP f xs
+     -> (forall g. NP g xs -> NS (NP g) xss)
+     -> SplitProd f xss
+
+-- gPrettyD :: forall a x f. (HasDatatypeInfo a, GObserve a)
+--          => Demand a (K (f x))
+--          -> PrettyDemand f QConstructorName x
+-- gPrettyD (GD demand) =
+--   case info of
+--     ADT m d cs ->
+--       prettyC m d demand cs
+--     Newtype m d c ->
+--       prettyC m d demand (c :* Nil)
+--   where
+--     info = datatypeInfo (Proxy :: Proxy a)
+
+--     prettyC :: forall as. ModuleName -> DatatypeName
+--             -> NS (NP (K (f x))) as
+--             -> NP ConstructorInfo as
+--             -> PrettyDemand f QConstructorName x
+--     prettyC m d subDemand constructors =
+--       case (subDemand, constructors) of
+--         (Z demandFields, c :* _) ->
+--           case c of
+--             Constructor name ->
+--               Constr (m, d, name) . Left $
+--                 hcollapse demandFields
+--             Infix name _ _ ->
+--               Constr (m, d, name) . Left $
+--                 hcollapse demandFields
+--             Record name fieldsInfo ->
+--               Constr (m, d, name) . Right $
+--                 zip ( hcollapse
+--                     . hliftA (\(FieldInfo f) -> K (m, d, f))
+--                     $ fieldsInfo )
+--                     (hcollapse demandFields)
+--         (S another, _ :* different) ->
+--           prettyC m d another different
 
 --------------------------------------
 -- Deriving instances for things... --
