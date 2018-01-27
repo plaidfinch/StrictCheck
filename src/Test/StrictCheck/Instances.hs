@@ -54,11 +54,11 @@ instance (Consume v) => Consume (Seq v) where
 instance (Consume v) => Consume (Set v) where
   consume = fields . map consume . Set.toList
 
--- instance Observe ()
--- instance (Observe a, Observe b) => Observe (a, b)
--- instance Observe a => Observe [a]
--- instance Observe a => Observe (Maybe a)
--- instance (Observe a, Observe b) => Observe (Either a b)
+instance Observe ()
+instance (Observe a, Observe b) => Observe (a, b)
+instance Observe a => Observe [a]
+instance Observe a => Observe (Maybe a)
+instance (Observe a, Observe b) => Observe (Either a b)
 
 -- instance (Observe v, Typeable k) => Observe (Map k v) where
 --   type Demand (Map k v) = Map k `Containing` v

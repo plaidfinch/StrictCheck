@@ -3,7 +3,7 @@
   TypeApplications, ScopedTypeVariables, FlexibleContexts, ConstraintKinds,
   DeriveFunctor, FlexibleInstances, StandaloneDeriving, DeriveGeneric,
   DeriveAnyClass, TypeOperators, PolyKinds, DeriveDataTypeable,
-  PartialTypeSignatures #-}
+  PartialTypeSignatures, LambdaCase #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 --{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
@@ -19,12 +19,16 @@ import Data.Kind
 import qualified GHC.Generics as GHC
 import Generics.SOP
 import Generics.SOP.NP
+import Generics.SOP.NS
 import Generics.SOP.Constraint
 import Control.DeepSeq
 import Data.Bifunctor
 import Control.Monad.Identity
 import Data.Fix
 import Type.Reflection
+import Data.Functor.Product
+import Unsafe.Coerce
+import Data.List.NonEmpty
 
 
 --------------------------------------------------------
@@ -55,7 +59,7 @@ class Typeable a => Observe (a :: *) where
 
   withFieldsD
     :: Demand a f
-    -> (forall xs. (SListI xs, AllF Observe xs)
+    -> (forall xs. All Observe xs
           => NP f xs
           -> (forall g. NP g xs -> Demand a g)
           -> result)
@@ -63,12 +67,17 @@ class Typeable a => Observe (a :: *) where
   default withFieldsD
     :: GObserve a
     => Demand a f
-    -> (forall xs. (SListI xs, AllF Observe xs)
+    -> (forall xs. All Observe xs
           => NP f xs
           -> (forall g. NP g xs -> Demand a g)
           -> result)
     -> result
   withFieldsD = gWithFieldsD
+
+  matchD :: Demand a f -> Demand a g -> Maybe (Demand a (Product f g))
+  default matchD :: GObserve a
+    => Demand a f -> Demand a g -> Maybe (Demand a (Product f g))
+  matchD = gMatchD
 
   -- prettyD :: Demand a g
   --         -> [PrettyDemand f QConstructorName]
@@ -79,19 +88,66 @@ class Typeable a => Observe (a :: *) where
   --   -> PrettyDemand f QConstructorName
   -- prettyD = gPrettyD
 
--- data FlatDemand (a :: *) (f :: * -> *) where
---   FlatDemand
---     :: (SingI xs, AllF Observe xs)
---     => ExtraDemandInfo a xs
---     -> NP f xs
---     -> (forall g. ExtraDemandInfo a xs -> NP g xs -> Demand a g)
---     -> FlatDemand a f
+-- TODO: Put the stuff below here somewhere else
 
 mapD :: forall a f g. Observe a
       => (forall x. Observe x => f x -> g x)
       -> Demand a f -> Demand a g
 mapD t d = withFieldsD @a d $ \fields unflatten ->
   unflatten (hcliftA (Proxy :: Proxy Observe) t fields)
+
+withFieldsViaList :: forall a f result. Observe a
+  => (forall r h.
+        Demand a h ->
+        (forall x. Observe x
+           => [f x]
+           -> (forall g. [g x] -> Demand a g)
+           -> r)
+        -> r)
+  -> Demand a f
+  -> (forall xs. All Observe xs
+        => NP f xs
+        -> (forall g. NP g xs -> Demand a g)
+        -> result)
+  -> result
+withFieldsViaList viaList demand cont =
+  viaList demand $
+    \list unflatten ->
+       withNP @Observe list unflatten cont
+
+withNP :: forall c s f r x. c x
+       => [f x]
+       -> (forall g. [g x] -> s g)
+       -> (forall xs. All c xs => NP f xs -> (forall g. NP g xs -> s g) -> r)
+       -> r
+withNP list unList cont =
+  withUnhomogenized @c list $ \np ->
+    cont np (unList . homogenize)
+
+homogenize :: All ((~) a) as => NP f as -> [f a]
+homogenize      Nil  = []
+homogenize (a :* as) = a : homogenize as
+
+withUnhomogenized :: forall c a f r.
+  c a => [f a] -> (forall as. (All c as, All ((~) a) as) => NP f as -> r) -> r
+withUnhomogenized      []  k = k Nil
+withUnhomogenized (a : as) k =
+  withUnhomogenized @c as $ \np -> k (a :* np)
+
+shrinkField :: forall a. Observe a => Field Thunk a -> [Field Thunk a]
+shrinkField (F T)     = []
+shrinkField (F (E d)) =
+  withFieldsD @a d $ \np unflat ->
+    case shrinkOne np of
+      [] -> [F T]
+      xs -> fmap (F . E . unflat) xs
+  where
+    shrinkOne :: All Observe xs => NP (Field Thunk) xs -> [NP (Field Thunk) xs]
+    shrinkOne Nil = []
+    shrinkOne (F T :* xs) =
+      (F T :*) <$> shrinkOne xs
+    shrinkOne (f@(F (E _)) :* xs) =
+      fmap (:* xs) (shrinkField f) ++ fmap (f :* ) (shrinkOne xs)
 
 
 -----------------------------------------------
@@ -114,6 +170,8 @@ unfoldD :: forall a f g. (Functor g, Observe a)
         -> f a -> Field g a
 unfoldD coalg = F . fmap (mapD @a (unfoldD coalg)) . coalg
 
+-- TODO: mapMD, foldMD, unfoldMD, ...
+
 projectField :: forall a f. (Functor f, Observe a)
              => (forall x. x -> f x)
              -> a -> Field f a
@@ -126,18 +184,19 @@ embedField e = e . foldD (fmap (embedD e))
 
 unzipField :: forall a f g h.
            (Observe a, Functor f, Functor g, Functor h)
-           => (forall x. f x -> (g x, h x))
-           -> Field f a -> (Field g a, Field h a)
+           => (forall x. f x -> Product g h x)
+           -> Field f a -> Product (Field g) (Field h) a
 unzipField split =
-  getBoth . foldD (Both . crunch . split)
+  foldD (crunch . split)
   where
     crunch :: forall x. Observe x
-           => ( g (Demand x (Both (Field g) (Field h)))
-              , h (Demand x (Both (Field g) (Field h))) )
-           -> (Field g x, Field h x)
+           => Product g h (Demand x (Product (Field g) (Field h)))
+           -> Product (Field g) (Field h) x
     crunch =
-      bimap (F . fmap (mapD @x fstBoth))
-            (F . fmap (mapD @x sndBoth))
+      uncurry Pair
+      . bimap (F . fmap (mapD @x (\(Pair l _) -> l)))
+              (F . fmap (mapD @x (\(Pair _ r) -> r)))
+      . (\(Pair l r) -> (l, r))
 
 -- prettyField :: forall a f. (Observe a, Functor f) => Field f a
 --             -> f (Fix (PrettyDemand f QConstructorName))
@@ -147,24 +206,6 @@ unzipField split =
 --              => f (Demand x (K (f (Fix (PrettyDemand f QConstructorName)))))
 --              -> K (f (Fix (PrettyDemand f QConstructorName))) x
 --     oneLevel = K . fmap @f (Fix . prettyD @x)
-
-
------------------------------
--- The Both type is useful --
------------------------------
-
-newtype Both f g a = Both (f a, g a)
-
-getBoth :: Both f g a -> (f a, g a)
-getBoth (Both both) = both
-
-fstBoth :: Both f g a -> f a
-fstBoth (Both (fa, _)) = fa
-
-sndBoth :: Both f g a -> g a
-sndBoth (Both (_, ga)) = ga
-
--- TODO: Replace this with Data.Functor.Product
 
 
 ------------------------------------------------------
@@ -190,7 +231,8 @@ entangle a =
 entangleField :: Observe a => a -> (a, Field Thunk a)
 entangleField =
   first (embedField unI)
-  . unzipField (first I . entangle . unI)
+  . (\(Pair l r) -> (l, r))
+  . unzipField (uncurry Pair . first I . entangle . unI)
   . projectField I
 
 observe :: (Observe a, NFData (Demand a (Field Thunk)))
@@ -246,7 +288,7 @@ type GObserve a =
   , Demand a ~ GDemand a
   , All2 Observe (Code a)
   , SListI (Code a)
-  , AllF SListI (Code a) )
+  , All SListI (Code a) )
 
 -- gMapD :: GObserve a
 --       => (forall x. Observe x => f x -> g x)
@@ -268,28 +310,38 @@ gEmbedD e (GD d) =
 
 gWithFieldsD :: forall a f result. GObserve a
   => Demand a f
-  -> (forall xs. (SListI xs, AllF Observe xs)
+  -> (forall xs. All Observe xs
         => NP f xs
         -> (forall g. NP g xs -> Demand a g)
         -> result)
   -> result
-gWithFieldsD (GD d) k =
-  case splitProd d of
-    SP fields unflatten -> k fields (GD . unflatten)
+gWithFieldsD (GD d) cont =
+  go d (\fields unflatten -> cont fields (GD . unflatten))
+  where
+    go :: forall xss r.
+      (All SListI xss, All2 Observe xss)
+       => NS (NP f) xss
+       -> (forall xs. All Observe xs =>
+             (NP f xs -> (forall g. NP g xs -> NS (NP g) xss) -> r))
+       -> r
+    go (Z fields) k = k fields Z
+    go (S more)   k =
+      go more $ \fields unflatten ->
+        k fields (S . unflatten)
 
-splitProd :: (AllF SListI xss, All2 Observe xss)
-          => NS (NP f) xss
-          -> SplitProd f xss
-splitProd (Z fields) = SP fields Z
-splitProd (S more)   =
-  case splitProd more of
-    SP fields unflatten -> SP fields (S . unflatten)
-
-data SplitProd f xss where
-  SP :: (SListI xs, AllF Observe xs)
-     => NP f xs
-     -> (forall g. NP g xs -> NS (NP g) xss)
-     -> SplitProd f xss
+gMatchD :: forall a f g. GObserve a
+        => Demand a f -> Demand a g
+        -> Maybe (Demand a (Product f g))
+gMatchD (GD df) (GD dg) =
+  GD <$> go df dg
+  where
+    go :: forall xss. All SListI xss
+       => NS (NP f) xss
+       -> NS (NP g) xss
+       -> Maybe (NS (NP (Product f g)) xss)
+    go (Z fs)  (Z gs)  = Just (Z (liftA2_NP Pair fs gs))
+    go (S fss) (S gss) = S <$> go fss gss
+    go _       _       = Nothing
 
 -- gPrettyD :: forall a x f. (HasDatatypeInfo a, GObserve a)
 --          => Demand a (K (f x))
@@ -338,15 +390,15 @@ deriving instance (NFData (f (Demand a (Field f)))) => NFData (Field f a)
 
 deriving instance GHC.Generic (GDemand a f)
 deriving instance ( SListI (Code a)
-                  , AllF (Compose Eq (NP f)) (Code a)
+                  , All (Compose Eq (NP f)) (Code a)
                   ) => Eq (GDemand a f)
 deriving instance ( SListI (Code a)
-                  , AllF (Compose Eq (NP f)) (Code a)
-                  , AllF (Compose Ord (NP f)) (Code a)
+                  , All (Compose Eq (NP f)) (Code a)
+                  , All (Compose Ord (NP f)) (Code a)
                   ) => Ord (GDemand a f)
 deriving instance ( SListI (Code a)
-                  , AllF (Compose Show (NP f)) (Code a)
+                  , All (Compose Show (NP f)) (Code a)
                   ) => Show (GDemand a f)
 deriving instance ( SListI (Code a)
-                  , AllF (Compose NFData (NP f)) (Code a)
+                  , All (Compose NFData (NP f)) (Code a)
                   ) => NFData (GDemand a f)

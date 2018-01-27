@@ -28,7 +28,7 @@ library
                        extra >= 1.6,
                        monad-loops >= 0.4.3,
                        containers >= 0.5.10,
-                       generics-sop >= 0.3.1.0
+                       generics-sop >= 0.3.2.0
   exposed-modules:     Test.StrictCheck
                        Test.StrictCheck.Curry,
                        Test.StrictCheck.Consume,
