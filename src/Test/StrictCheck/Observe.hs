@@ -74,9 +74,11 @@ class Typeable a => Observe (a :: *) where
     -> result
   withFieldsD = gWithFieldsD
 
-  matchD :: Demand a f -> Demand a g -> Maybe (Demand a (Product f g))
+  matchD :: (forall x. f x -> g x -> h x)
+         -> Demand a f -> Demand a g -> Maybe (Demand a h)
   default matchD :: GObserve a
-    => Demand a f -> Demand a g -> Maybe (Demand a (Product f g))
+    => (forall x. f x -> g x -> h x)
+    -> Demand a f -> Demand a g -> Maybe (Demand a h)
   matchD = gMatchD
 
   -- prettyD :: Demand a g
@@ -96,18 +98,18 @@ mapD :: forall a f g. Observe a
 mapD t d = withFieldsD @a d $ \fields unflatten ->
   unflatten (hcliftA (Proxy :: Proxy Observe) t fields)
 
-withFieldsViaList :: forall a f result. Observe a
-  => (forall r h.
-        Demand a h ->
+withFieldsViaList :: forall f demand result.
+     (forall r h.
+        demand h ->
         (forall x. Observe x
            => [f x]
-           -> (forall g. [g x] -> Demand a g)
+           -> (forall g. [g x] -> demand g)
            -> r)
         -> r)
-  -> Demand a f
+  -> demand f
   -> (forall xs. All Observe xs
         => NP f xs
-        -> (forall g. NP g xs -> Demand a g)
+        -> (forall g. NP g xs -> demand g)
         -> result)
   -> result
 withFieldsViaList viaList demand cont =
@@ -115,11 +117,12 @@ withFieldsViaList viaList demand cont =
     \list unflatten ->
        withNP @Observe list unflatten cont
 
-withNP :: forall c s f r x. c x
+withNP :: forall c demand result f x. c x
        => [f x]
-       -> (forall g. [g x] -> s g)
-       -> (forall xs. All c xs => NP f xs -> (forall g. NP g xs -> s g) -> r)
-       -> r
+       -> (forall g. [g x] -> demand g)
+       -> (forall xs. All c xs
+             => NP f xs -> (forall g. NP g xs -> demand g) -> result)
+       -> result
 withNP list unList cont =
   withUnhomogenized @c list $ \np ->
     cont np (unList . homogenize)
@@ -274,7 +277,8 @@ observe context function input =
 type QConstructorName = (ModuleName, DatatypeName, ConstructorName)
 
 -- TODO: More flexible pretty-type, to allow abstract types to be correctly
--- represented and displayed
+-- represented and displayed. This will require capturing info about
+-- associativity and fixity.
 
 ---------------------------------------------------
 -- Generic implementation of the Observe methods --
@@ -329,17 +333,18 @@ gWithFieldsD (GD d) cont =
       go more $ \fields unflatten ->
         k fields (S . unflatten)
 
-gMatchD :: forall a f g. GObserve a
-        => Demand a f -> Demand a g
-        -> Maybe (Demand a (Product f g))
-gMatchD (GD df) (GD dg) =
+gMatchD :: forall a f g h. GObserve a
+        => (forall x. f x -> g x -> h x)
+        -> Demand a f -> Demand a g
+        -> Maybe (Demand a h)
+gMatchD combine (GD df) (GD dg) =
   GD <$> go df dg
   where
     go :: forall xss. All SListI xss
        => NS (NP f) xss
        -> NS (NP g) xss
-       -> Maybe (NS (NP (Product f g)) xss)
-    go (Z fs)  (Z gs)  = Just (Z (liftA2_NP Pair fs gs))
+       -> Maybe (NS (NP h) xss)
+    go (Z fs)  (Z gs)  = Just (Z (liftA2_NP combine fs gs))
     go (S fss) (S gss) = S <$> go fss gss
     go _       _       = Nothing
 
