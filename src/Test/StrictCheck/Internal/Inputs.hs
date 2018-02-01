@@ -1,5 +1,3 @@
-{-# language RankNTypes #-}
-
 module Test.StrictCheck.Internal.Inputs where
 
 import Test.QuickCheck

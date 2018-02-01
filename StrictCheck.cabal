@@ -34,11 +34,21 @@ library
                        Test.StrictCheck.Consume,
                        Test.StrictCheck.Produce,
                        Test.StrictCheck.Observe,
-                       Test.StrictCheck.Internal.Inputs
-                       Test.StrictCheck.Instances
+                       Test.StrictCheck.Internal.Inputs,
+                       Test.StrictCheck.Instances,
+                       Test.StrictCheck.Instances.Tools,
+                       Test.StrictCheck.Demands
                        -- Test.StrictCheck.Scratch.Observe,
                        -- Test.StrictCheck.Scratch.LazyCoArbitrary,
                        -- Test.StrictCheck.Scratch.Nats
+  default-extensions:   DataKinds, GADTs, BangPatterns, TypeFamilies, RankNTypes,
+                        AllowAmbiguousTypes, UndecidableInstances,
+                        DefaultSignatures, TypeApplications, ScopedTypeVariables,
+                        FlexibleContexts, ConstraintKinds, DeriveFunctor,
+                        FlexibleInstances, StandaloneDeriving, DeriveGeneric,
+                        DeriveAnyClass, TypeOperators, PolyKinds, LambdaCase,
+                        TupleSections, TypeFamilyDependencies,
+                        MultiParamTypeClasses
 -- Do something about type defaults?
   ghc-options:         -Wall
 

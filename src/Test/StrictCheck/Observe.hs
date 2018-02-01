@@ -1,10 +1,3 @@
-{-# language DataKinds, GADTs, BangPatterns, TypeFamilies, RankNTypes,
-  AllowAmbiguousTypes, UndecidableInstances, DefaultSignatures,
-  TypeApplications, ScopedTypeVariables, FlexibleContexts, ConstraintKinds,
-  DeriveFunctor, FlexibleInstances, StandaloneDeriving, DeriveGeneric,
-  DeriveAnyClass, TypeOperators, PolyKinds, DeriveDataTypeable,
-  PartialTypeSignatures, LambdaCase #-}
-
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 --{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 
@@ -27,8 +20,6 @@ import Control.Monad.Identity
 import Data.Fix
 import Type.Reflection
 import Data.Functor.Product
-import Unsafe.Coerce
-import Data.List.NonEmpty
 
 
 --------------------------------------------------------
@@ -49,12 +40,12 @@ class Typeable a => Observe (a :: *) where
 
   projectD :: (forall x. Observe x => x -> f x) -> a -> Demand a f
   default projectD :: GObserve a
-    => (forall x. Observe x => x -> f x) -> a -> Demand a f
+           => (forall x. Observe x => x -> f x) -> a -> Demand a f
   projectD = gProjectD
 
   embedD :: (forall x. Observe x => f x -> x) -> Demand a f -> a
   default embedD :: GObserve a
-    => (forall x. Observe x => f x -> x) -> Demand a f -> a
+         => (forall x. Observe x => f x -> x) -> Demand a f -> a
   embedD = gEmbedD
 
   withFieldsD
@@ -77,9 +68,11 @@ class Typeable a => Observe (a :: *) where
   matchD :: (forall x. f x -> g x -> h x)
          -> Demand a f -> Demand a g -> Maybe (Demand a h)
   default matchD :: GObserve a
-    => (forall x. f x -> g x -> h x)
-    -> Demand a f -> Demand a g -> Maybe (Demand a h)
+         => (forall x. f x -> g x -> h x)
+         -> Demand a f -> Demand a g -> Maybe (Demand a h)
   matchD = gMatchD
+
+  -- prettyD :: Demand a f -> [x] -> PrettyDemand string x
 
   -- prettyD :: Demand a g
   --         -> [PrettyDemand f QConstructorName]
@@ -98,44 +91,6 @@ mapD :: forall a f g. Observe a
 mapD t d = withFieldsD @a d $ \fields unflatten ->
   unflatten (hcliftA (Proxy :: Proxy Observe) t fields)
 
-withFieldsViaList :: forall f demand result.
-     (forall r h.
-        demand h ->
-        (forall x. Observe x
-           => [f x]
-           -> (forall g. [g x] -> demand g)
-           -> r)
-        -> r)
-  -> demand f
-  -> (forall xs. All Observe xs
-        => NP f xs
-        -> (forall g. NP g xs -> demand g)
-        -> result)
-  -> result
-withFieldsViaList viaList demand cont =
-  viaList demand $
-    \list unflatten ->
-       withNP @Observe list unflatten cont
-
-withNP :: forall c demand result f x. c x
-       => [f x]
-       -> (forall g. [g x] -> demand g)
-       -> (forall xs. All c xs
-             => NP f xs -> (forall g. NP g xs -> demand g) -> result)
-       -> result
-withNP list unList cont =
-  withUnhomogenized @c list $ \np ->
-    cont np (unList . homogenize)
-
-homogenize :: All ((~) a) as => NP f as -> [f a]
-homogenize      Nil  = []
-homogenize (a :* as) = a : homogenize as
-
-withUnhomogenized :: forall c a f r.
-  c a => [f a] -> (forall as. (All c as, All ((~) a) as) => NP f as -> r) -> r
-withUnhomogenized      []  k = k Nil
-withUnhomogenized (a : as) k =
-  withUnhomogenized @c as $ \np -> k (a :* np)
 
 shrinkField :: forall a. Observe a => Field Thunk a -> [Field Thunk a]
 shrinkField (F T)     = []
@@ -225,10 +180,10 @@ entangle :: forall a. a -> (a, Thunk a)
 entangle a =
   unsafePerformIO $ do
     ref <- newIORef T
-    return ( (unsafePerformIO $ do
-                writeIORef ref (E a)
-                return a)
-           , unsafePerformIO (readIORef ref) )
+    return ( unsafePerformIO $ do
+               writeIORef ref (E a)
+               return a
+           , unsafePerformIO $ readIORef ref )
 
 {-# NOINLINE entangleField #-}
 entangleField :: Observe a => a -> (a, Field Thunk a)
@@ -344,7 +299,7 @@ gMatchD combine (GD df) (GD dg) =
        => NS (NP f) xss
        -> NS (NP g) xss
        -> Maybe (NS (NP h) xss)
-    go (Z fs)  (Z gs)  = Just (Z (liftA2_NP combine fs gs))
+    go (Z fs)  (Z gs)  = Just (Z (hliftA2 combine fs gs))
     go (S fss) (S gss) = S <$> go fss gss
     go _       _       = Nothing
 

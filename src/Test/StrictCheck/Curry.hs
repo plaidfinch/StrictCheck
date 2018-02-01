@@ -1,10 +1,5 @@
-{-# language TypeFamilyDependencies, GADTs, TypeInType, TypeOperators,
-  TypeApplications, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts,
-  AllowAmbiguousTypes, ScopedTypeVariables, UndecidableInstances #-}
-
 module Test.StrictCheck.Curry where
 
-import Data.Kind
 import Generics.SOP
 import Generics.SOP.NP
 

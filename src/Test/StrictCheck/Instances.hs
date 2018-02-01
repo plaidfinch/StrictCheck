@@ -1,5 +1,3 @@
-{-# language TypeOperators, TypeFamilies, DeriveGeneric, DeriveAnyClass, RankNTypes #-}
-
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-unused-imports #-}
 
 module Test.StrictCheck.Instances where

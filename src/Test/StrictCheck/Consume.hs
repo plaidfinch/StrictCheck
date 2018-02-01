@@ -1,6 +1,3 @@
-{-# language BangPatterns, TupleSections, RankNTypes, TypeOperators, GADTs,
-  FlexibleContexts, DefaultSignatures #-}
-
 module Test.StrictCheck.Consume
   ( Input
   , Inputs
