@@ -21,6 +21,8 @@ import Data.Fix
 import Type.Reflection
 import Data.Functor.Product
 
+import Test.StrictCheck.Curry
+
 
 --------------------------------------------------------
 -- The basic types which make up a demand description --
@@ -193,9 +195,9 @@ entangleField =
   . unzipField (uncurry Pair . first I . entangle . unI)
   . projectField I
 
-observe :: (Observe a, NFData (Demand a (Field Thunk)))
+observed1 :: (Observe a, NFData (Demand a (Field Thunk)))
         => (b -> ()) -> (a -> b) -> a -> (b, Field Thunk a)
-observe context function input =
+observed1 context function input =
   runIdentity $ do
     let (observable, observation) = entangleField input
         result = function observable
@@ -203,8 +205,39 @@ observe context function input =
     !_ <- evaluate (rnf observation)
     return (result, observation)
 
--- TODO: Implement n-ary observation
+observedNP :: (All Observe inputs, All (Compose NFData (Field Thunk)) inputs)
+           => (result -> ())
+           -> (NP I inputs -> result)
+           -> NP I inputs
+           -> (result, NP (Field Thunk) inputs)
+observedNP context function inputs =
+  runIdentity $ do
+    let entangled =
+          hcliftA (Proxy :: Proxy Observe)
+                  (uncurry Pair . first I . entangleField . unI) inputs
+        (observables, observations) =
+          (hliftA (\(Pair r _) -> r) entangled,
+           hliftA (\(Pair _ l) -> l) entangled)
+        result = function observables
+    !_ <- evaluate (context result)
+    !_ <- evaluate (rnf observations)
+    return (result, observations)
 
+observed :: ( inputs ~ Args function
+            , result ~ Result function
+            , observedResult ~ (result, NP (Field Thunk) inputs)
+            , observedFunction ~ WithArgs inputs observedResult
+            , Result observedFunction ~ observedResult
+            , Args observedFunction ~ inputs
+            , Curry inputs function
+            , Curry inputs observedFunction
+            , All Observe inputs
+            , All (Compose NFData (Field Thunk)) inputs )
+         => (result -> ())
+         -> function
+         -> observedFunction
+observed context function =
+  curryAll (observedNP context (uncurryAll function))
 
 -----------------------------
 -- Pretty-printing demands --
