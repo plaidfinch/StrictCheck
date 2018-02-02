@@ -14,9 +14,11 @@ import qualified Data.Map as Map
 import Data.Set hiding ( toList, map )
 import qualified Data.Set as Set
 import Data.Foldable
-import Data.Sequence
+import Data.Sequence hiding ( zip )
 import Generics.SOP
-import Data.Coerce
+import Data.Typeable
+import Control.Monad
+
 
 instance Generic (Tree a)
 
@@ -42,16 +44,27 @@ instance (Observe a, Observe b) => Observe (Either a b)
 
 instance Observe Int where
   type Demand Int = Prim Int
-  projectD _ = Prim
-  embedD   _ = unPrim
-  withFieldsD i k = k Nil (const (coerce i))
-  matchD _ df dg = if df == (coerce dg) then (Just (coerce df)) else Nothing
+  projectD    = projectPrim
+  embedD      = embedPrim
+  withFieldsD = withFieldsPrim
+  matchD      = matchPrim
 
-
--- instance (Observe v, Typeable k) => Observe (Map k v) where
---   type Demand (Map k v) = Map k `Containing` v
---   projectD = projectContaining
---   embedD   = embedContaining
+instance (Observe v, Typeable k, Ord k) => Observe (Map k v) where
+  type Demand (Map k v) = Map k `Containing` v
+  projectD = projectContainer
+  embedD   = embedContainer
+  withFieldsD =
+    withFieldsViaContainer $ \m k ->
+      k (Map.elems m) (Map.fromList . zip (keys m))
+  matchD =
+    matchContainer $ \f m n ->
+      Map.fromList <$>
+        zipWithM (\(kM, vM) (kN, vN) ->
+                    if kM == kN
+                    then Just (kM, f vM vN)
+                    else Nothing)
+                 (assocs m)
+                 (assocs n)
 
 -- instance Observe a => Observe (Seq a) where
 --   type Demand (Seq a) = Seq `Containing` a
