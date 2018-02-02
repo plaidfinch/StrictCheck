@@ -1,3 +1,4 @@
+{-# language UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 --{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 
@@ -20,6 +21,8 @@ import Control.Monad.Identity
 import Data.Fix
 import Type.Reflection
 import Data.Functor.Product
+import Data.Constraint
+import qualified Unsafe.Coerce as UNSAFE
 
 import Test.StrictCheck.Curry
 
@@ -223,31 +226,64 @@ observedNP context function inputs =
     !_ <- evaluate (rnf observations)
     return (result, observations)
 
-type ObserveCurriedContext function =
-  ( Result (Args function -..->
-             (Result function, NP (Field Thunk) (Args function)))
-    ~ (Result function, NP (Field Thunk) (Args function))
-  , Args (Args function -..->
-           (Result function, NP (Field Thunk) (Args function)))
-    ~ (Args function)
-  , Curry (Args function) function
+type ObserveCurried function =
+  ( Curry (Args function) function
   , Curry (Args function)
     (Args function -..->
       (Result function, NP (Field Thunk) (Args function)))
-  )
+  , All Observe (Args function)
+  , All (Compose NFData (Field Thunk)) (Args function) )
 
-class    ObserveCurriedContext function => ObserveCurried function
-instance ObserveCurriedContext function => ObserveCurried function
+type Demands = NP (Field Thunk)
 
-observed :: ( ObserveCurried function
-            , All Observe (Args function)
-            , All (Compose NFData (Field Thunk)) (Args function) )
+observed :: forall function. ObserveCurried function
          => (Result function -> ())
          -> function
          -> Args function
-         -..-> (Result function, NP (Field Thunk) (Args function))
+         -..-> (Result function,
+                Demands (Args function))
 observed context function =
-  curryAll (observedNP context (uncurryAll function))
+  case i_swear_it's_true of
+    Dict -> curryAll (observedNP context (uncurryAll function))
+  where
+    -- See Note [Equalities about currying]
+    i_swear_it's_true =
+      UNSAFE.unsafeCoerce
+        (Dict :: Dict (() ~ (), () ~ ())) ::
+          Dict ( Result (Args function -..->
+                         (Result function, NP (Field Thunk) (Args function)))
+                 ~ (Result function, NP (Field Thunk) (Args function))
+               , Args (Args function -..->
+                       (Result function, NP (Field Thunk) (Args function)))
+                 ~ Args function )
+
+-- Note [Equalities about currying]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+-- The coerced dictionary in the implementation of the function observed
+-- witnesses two identities about variadic currying/uncurrying:
+
+-- A. Result (xs -..-> r) = Result r
+-- B. If r is not a function type: Args (xs -..-> r) = xs
+
+-- These are true for **any** types f and r, but GHC doesn't know that until it
+-- sees concrete types for f and r (because until then it can't reduce the type
+-- families for Result and Args).
+
+-- To convince GHC of these equalities, we have three options:
+
+-- 1. Place these equality constraints in observed's required constraints
+-- 2. Prove them to be true by induction on types
+-- 3. Assert their truth using unsafeCoerce
+
+-- Option (1) means significantly more hideous type errors for end users when
+-- the type of the given function cannot be fully inferred. Option (2) incurs a
+-- runtime cost proportionate to the arity of the given function. Only option
+-- (3) incurs no runtime cost and reduces type error noise for users.
+
+-- Notice that we cast from a Dict (() ~ (), () ~ ()) -- this is because we need
+-- one slot for each equality in the resultant coerced Dict.
+
 
 -----------------------------
 -- Pretty-printing demands --

@@ -2,6 +2,8 @@ module Test.StrictCheck.Curry where
 
 import Generics.SOP
 import Generics.SOP.NP
+import qualified Unsafe.Coerce as UNSAFE
+import Data.Type.Equality
 
 
 -------------------------------------------------
