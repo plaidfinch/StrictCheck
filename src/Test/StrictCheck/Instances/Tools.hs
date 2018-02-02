@@ -67,7 +67,7 @@ matchPrim _ df dg = if df == (coerce dg) then (Just (coerce df)) else Nothing
 
 -- TODO: What about demands for abstract types with > 1 type of unbounded-count field?
 
-withFieldsViaContainer ::
+withFieldsContainer ::
   forall c a f result.
      (forall r h.
         c (h a) ->
@@ -82,7 +82,7 @@ withFieldsViaContainer ::
         -> (forall g. NP g xs -> Containing c a g)
         -> result)
   -> result
-withFieldsViaContainer viaContaining (Container c) cont =
+withFieldsContainer viaContaining (Container c) cont =
   viaContaining c $
     \list unflatten ->
        withNP @Observe list (Container . unflatten) cont

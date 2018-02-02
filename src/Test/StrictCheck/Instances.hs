@@ -42,8 +42,8 @@ instance Observe a => Observe [a]
 instance Observe a => Observe (Maybe a)
 instance (Observe a, Observe b) => Observe (Either a b)
 
-instance Observe Int where
-  type Demand Int = Prim Int
+instance Observe Integer where
+  type Demand Integer = Prim Integer
   projectD    = projectPrim
   embedD      = embedPrim
   withFieldsD = withFieldsPrim
@@ -54,7 +54,7 @@ instance (Observe v, Typeable k, Ord k) => Observe (Map k v) where
   projectD = projectContainer
   embedD   = embedContainer
   withFieldsD =
-    withFieldsViaContainer $ \m k ->
+    withFieldsContainer $ \m k ->
       k (Map.elems m) (Map.fromList . zip (keys m))
   matchD =
     matchContainer $ \f m n ->
@@ -77,10 +77,10 @@ instance (Observe v, Typeable k, Ord k) => Observe (Map k v) where
 --   embedD   e = Set.fromList . embedContaining e
 
 instance Produce Integer where
-  produce = produceArbitrary
+  produce = producePrimitive
 
 instance Consume Integer where
-  consume = consumeCoArbitrary
+  consume = consumePrimitive
 
 instance (Produce a, Produce b) => Produce (a, b) where
   produce inputs =

@@ -4,7 +4,7 @@ module Test.StrictCheck.Consume
   , Consume(..)
   , fields
   , consumeTrivial
-  , consumeCoArbitrary
+  , consumePrimitive
   ) where
 
 import Test.QuickCheck
@@ -36,8 +36,8 @@ fields =
 
 -- | Use the CoArbitrary instance for a type to consume it. This should only be
 -- used for "flat" types, i.e. those which contain no interesting substructure.
-consumeCoArbitrary :: CoArbitrary a => a -> Input
-consumeCoArbitrary !a =
+consumePrimitive :: CoArbitrary a => a -> Input
+consumePrimitive !a =
   Input . Just . Urn.singleton 1 $
     (Variant (coarbitrary a), Input Nothing)
 

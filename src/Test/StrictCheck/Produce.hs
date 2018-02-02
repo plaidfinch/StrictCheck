@@ -1,7 +1,7 @@
 module Test.StrictCheck.Produce
   ( Produce(..)
   , recur
-  , produceArbitrary
+  , producePrimitive
   , Lazy(..)
   , lazy
   , Input
@@ -40,8 +40,8 @@ recur (Inputs is) = do
 
 -- | Use the Arbitrary instance for a type to produce it. This should only be
 -- used for "flat" types, i.e. those which contain no interesting substructure.
-produceArbitrary :: Arbitrary b => Inputs -> Gen b
-produceArbitrary _ = arbitrary
+producePrimitive :: Arbitrary b => Inputs -> Gen b
+producePrimitive _ = arbitrary
 
 
 ---------------------------------------
