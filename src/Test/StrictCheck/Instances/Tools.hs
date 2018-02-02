@@ -2,6 +2,56 @@ module Test.StrictCheck.Instances.Tools where
 
 import Test.StrictCheck.Observe
 import Generics.SOP
+import GHC.Generics as GHC
+import Control.DeepSeq
+import Data.Coerce
+
+-- | Convenience type for representing demands upon abstract structures with one
+-- type recursively-demanded type parameter (i.e. (Map k) or Seq)
+
+newtype Containing h a f =
+  Container (h (f a))
+  deriving (Eq, Ord, Show, GHC.Generic, NFData)
+
+projectContaining :: (Functor h, Observe a)
+  => (forall x. Observe x => x -> f x)
+  -> h a -> Containing h a f
+
+embedContaining :: (Functor h, Observe a)
+  => (forall x. Observe x => f x -> x)
+  -> Containing h a f -> h a
+
+projectContaining p            x  = Container (fmap p x)
+embedContaining   e (Container x) =            fmap e x
+-- prettyContaining  n (Container x) = Constr n (Left (fmap unK (toList x)))
+
+
+-- | Convenience type for representing demands upon primitive types (i.e. Int)
+
+newtype Prim (x :: *) (f :: * -> *) = Prim x
+  deriving (Eq, Ord, Show, GHC.Generic, NFData)
+
+unPrim :: Prim x f -> x
+unPrim (Prim x) = x
+
+projectPrim :: (forall x. Observe x => x -> f x) -> a -> Prim a f
+projectPrim _ = Prim
+
+embedPrim :: (forall x. Observe x => f x -> x) -> Prim a f -> a
+embedPrim _ = unPrim
+
+withFieldsPrim :: Prim a f
+               -> (forall xs. All Observe xs
+                     => NP f xs
+                     -> (forall g. NP g xs -> Prim a g)
+                     -> result)
+               -> result
+withFieldsPrim p k = k Nil (const (coerce p))
+
+matchPrim :: Eq a => (forall x. f x -> g x -> h x)
+          -> Prim a f -> Prim a g -> Maybe (Prim a h)
+matchPrim _ df dg = if df == (coerce dg) then (Just (coerce df)) else Nothing
+
 
 -- TODO: What about demands for abstract types with > 1 type of unbounded-count field?
 

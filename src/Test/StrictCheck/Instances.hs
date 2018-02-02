@@ -1,10 +1,11 @@
-{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-unused-imports #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Test.StrictCheck.Instances where
 
 import Test.StrictCheck.Consume
 import Test.StrictCheck.Produce
 import Test.StrictCheck.Observe
+import Test.StrictCheck.Instances.Tools
 import Test.QuickCheck
 
 import Data.Tree
@@ -14,29 +15,8 @@ import Data.Set hiding ( toList, map )
 import qualified Data.Set as Set
 import Data.Foldable
 import Data.Sequence
-import Data.Typeable
-import qualified GHC.Generics as GHC
 import Generics.SOP
-import Control.DeepSeq
-
--- | Convenience type for representing demands upon abstract structures with one
--- type recursively-demanded type parameter (i.e. (Map k) or Seq)
-
-newtype Containing h a f =
-  Container (h (f a))
-  deriving (Eq, Ord, Show, GHC.Generic, NFData)
-
-projectContaining :: (Functor h, Observe a)
-  => (forall x. Observe x => x -> f x)
-  -> h a -> Containing h a f
-
-embedContaining :: (Functor h, Observe a)
-  => (forall x. Observe x => f x -> x)
-  -> Containing h a f -> h a
-
-projectContaining p            x  = Container (fmap p x)
-embedContaining   e (Container x) =            fmap e x
--- prettyContaining  n (Container x) = Constr n (Left (fmap unK (toList x)))
+import Data.Coerce
 
 instance Consume ()
 instance (Consume a, Consume b) => Consume (a, b)
@@ -57,6 +37,14 @@ instance (Observe a, Observe b) => Observe (a, b)
 instance Observe a => Observe [a]
 instance Observe a => Observe (Maybe a)
 instance (Observe a, Observe b) => Observe (Either a b)
+
+instance Observe Int where
+  type Demand Int = Prim Int
+  projectD _ = Prim
+  embedD   _ = unPrim
+  withFieldsD i k = k Nil (const (coerce i))
+  matchD _ df dg = if df == (coerce dg) then (Just (coerce df)) else Nothing
+
 
 -- instance (Observe v, Typeable k) => Observe (Map k v) where
 --   type Demand (Map k v) = Map k `Containing` v
