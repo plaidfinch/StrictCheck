@@ -33,7 +33,8 @@ type family Result (f :: *) :: * where
   Result (a -> rest) = Result rest
   Result r           = r
 
-curryIdentity :: forall function. function :~: (Args function -..-> Result function)
+curryIdentity :: forall function.
+  function :~: (Args function -..-> Result function)
 curryIdentity = UNSAFE.unsafeCoerce (Refl :: () :~: ())
 
 ----------------------------------------
@@ -47,14 +48,14 @@ class Curry (args :: [*]) (result :: *) where
    curryFunction   :: Function args result -> (args -..-> result)
 
 -- | We can always move back and forth between a (Res x) and an x
-instance (Result x ~ x) => Curry '[] x where
+instance Result x ~ x => Curry '[] x where
   uncurryFunction    x  = Res x
   curryFunction (Res x) =     x
 
--- | If we know how to move back and forth between a Function on args & rest and
--- its corresponding function, we can do the same if we add one more argument to
--- the front of the list and to its corresponding function
-instance (Curry args rest) => Curry (a : args) rest where
+-- | If we know how to move back and forth between a Function on args & result
+-- and its corresponding function, we can do the same if we add one more
+-- argument to the front of the list and to its corresponding function
+instance Curry args result => Curry (a : args) result where
   uncurryFunction    f  = Arg $ \a -> uncurryFunction (f a)
   curryFunction (Arg f) =       \a -> curryFunction   (f a)
 
