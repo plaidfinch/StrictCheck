@@ -223,19 +223,29 @@ observedNP context function inputs =
     !_ <- evaluate (rnf observations)
     return (result, observations)
 
-observed :: ( inputs ~ Args function
-            , result ~ Result function
-            , observedResult ~ (result, NP (Field Thunk) inputs)
-            , observedFunction ~ WithArgs inputs observedResult
-            , Result observedFunction ~ observedResult
-            , Args observedFunction ~ inputs
-            , Curry inputs function
-            , Curry inputs observedFunction
-            , All Observe inputs
-            , All (Compose NFData (Field Thunk)) inputs )
-         => (result -> ())
+type ObserveCurriedContext function =
+  ( Result (Args function -..->
+             (Result function, NP (Field Thunk) (Args function)))
+    ~ (Result function, NP (Field Thunk) (Args function))
+  , Args (Args function -..->
+           (Result function, NP (Field Thunk) (Args function)))
+    ~ (Args function)
+  , Curry (Args function) function
+  , Curry (Args function)
+    (Args function -..->
+      (Result function, NP (Field Thunk) (Args function)))
+  )
+
+class    ObserveCurriedContext function => ObserveCurried function
+instance ObserveCurriedContext function => ObserveCurried function
+
+observed :: ( ObserveCurried function
+            , All Observe (Args function)
+            , All (Compose NFData (Field Thunk)) (Args function) )
+         => (Result function -> ())
          -> function
-         -> observedFunction
+         -> Args function
+         -..-> (Result function, NP (Field Thunk) (Args function))
 observed context function =
   curryAll (observedNP context (uncurryAll function))
 

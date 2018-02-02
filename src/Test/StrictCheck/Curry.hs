@@ -14,9 +14,9 @@ type family Args (f :: *) :: [*] where
   Args x           = '[]
 
 -- Given a list of argument types and a "rest" of type return a curried function
-type family WithArgs (args :: [*]) (rest :: *) :: * where
-  WithArgs '[]        rest = rest
-  WithArgs (a : args) rest = a -> WithArgs args rest
+type family (args :: [*]) -..-> (rest :: *) :: * where
+  '[]        -..-> rest = rest
+  (a : args) -..-> rest = a -> args -..-> rest
 
 -- Given a list of argument types matching some prefix of the arguments of a
 -- curried function type, remove those arguments from the function type
@@ -25,7 +25,9 @@ type family WithoutArgs (args :: [*]) (f :: *) :: * where
   WithoutArgs (a : args) (a -> rest) = WithoutArgs args rest
 
 -- Strip all arguments from a function type, yielding its (non-function) result
-type Result f = WithoutArgs (Args f) f
+type family Result (f :: *) :: * where
+  Result (a -> rest) = Result rest
+  Result r           = r
 
 
 -------------------------------------------------------
@@ -79,11 +81,11 @@ toFunction f = go (pure_NP (K ())) f
 -- | The Curry class lets us embed a function in a Function, or extract it
 -- This is yet another "inductive typeclass" definition
 class Curry (args :: [*]) (function :: *) where
-   uncurryFunction :: function -> Function args (WithoutArgs args function)
-   curryFunction   :: Function args (WithoutArgs args function) -> function
+   uncurryFunction :: function -> Function args (Result function)
+   curryFunction   :: Function args (Result function) -> function
 
 -- | We can always move back and forth between a (Res x) and an x
-instance Curry '[] x where
+instance Result x ~ x => Curry '[] x where
   uncurryFunction    x  = Res x
   curryFunction (Res x) =     x
 
