@@ -1,6 +1,6 @@
-{-# language UndecidableSuperClasses #-}
+{-# language PartialTypeSignatures #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
---{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
+{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 
 module Test.StrictCheck.Observe where
 
@@ -198,47 +198,45 @@ entangleField =
   . unzipField (uncurry Pair . first I . entangle . unI)
   . projectField I
 
-observed1 :: (Observe a, NFData (Demand a (Field Thunk)))
-        => (b -> ()) -> (a -> b) -> a -> (b, Field Thunk a)
-observed1 context function input =
+observe1 :: (Observe a, Observe b, _)
+         => (b -> ()) -> (a -> b) -> a -> (Field Thunk b, Field Thunk a)
+observe1 context function input =
   runIdentity $ do
-    let (observable, observation) = entangleField input
-        result = function observable
-    !_ <- evaluate (context result)
-    !_ <- evaluate (rnf observation)
-    return (result, observation)
+    let (input',  inputD)  = entangleField input
+        (result', resultD) = entangleField (function input')
+    !_ <- evaluate (context result')
+    !_ <- evaluate (rnf inputD)
+    !_ <- evaluate (rnf resultD)
+    return (resultD, inputD)
 
-observedNP :: ( All Observe inputs
-              , All (Compose NFData (Field Thunk)) inputs )
-           => (result -> ())
-           -> (NP I inputs -> result)
-           -> (NP I inputs -> (result, NP (Field Thunk) inputs))
-observedNP context function inputs =
+observeNP :: (All Observe inputs, Observe result, _)
+          => (result -> ())
+          -> (NP I inputs -> result)
+          -> NP I inputs
+          -> ( Field Thunk result
+             , NP (Field Thunk) inputs )
+observeNP context function inputs =
   runIdentity $ do
     let entangled =
           hcliftA (Proxy :: Proxy Observe)
                   (uncurry Pair . first I . entangleField . unI) inputs
-        (observables, observations) =
+        (inputs', inputsD) =
           (hliftA (\(Pair r _) -> r) entangled,
            hliftA (\(Pair _ l) -> l) entangled)
-        result = function observables
-    !_ <- evaluate (context result)
-    !_ <- evaluate (rnf observations)
-    return (result, observations)
+        (result', resultD) = entangleField (function inputs')
+    !_ <- evaluate (context result')
+    !_ <- evaluate (rnf inputsD)
+    !_ <- evaluate (rnf resultD)
+    return (resultD, inputsD)
 
-type Demands = NP (Field Thunk)
-
-observed :: forall function.
-         ( SListI (Args function)
-         , Curry (Args function) (Result function)
-         , Curry (Args function) (Result function, Demands (Args function))
-         , All Observe (Args function)
-         , All (Compose NFData (Field Thunk)) (Args function) )
-         => (Result function -> ())
-         -> function
-         -> (Args function -..-> (Result function, Demands (Args function)))
-observed context function =
-  curryAll (observedNP context (uncurryAll function))
+observe :: (All Observe (Args function), Observe (Result function), _)
+        => (Result function -> ())
+        -> function
+        -> Args function
+        -..-> ( Field Thunk (Result function)
+              , NP (Field Thunk) (Args function) )
+observe context function =
+  curryAll (observeNP context (uncurryAll function))
 
 
 -----------------------------
