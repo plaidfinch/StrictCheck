@@ -63,7 +63,8 @@ matchPrim :: Eq a => (forall x. f x -> g x -> h x)
           -> Prim a f -> Prim a g -> Maybe (Prim a h)
 matchPrim _ df dg = if df == (coerce dg) then (Just (coerce df)) else Nothing
 
-
+prettyPrim :: Show a => Prim a (K x) -> PrettyD x
+prettyPrim (Prim a) = CustomD 11 [Left (Left (show a))]
 
 -- TODO: What about demands for abstract types with > 1 type of unbounded-count field?
 

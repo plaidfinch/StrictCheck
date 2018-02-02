@@ -14,11 +14,11 @@ import qualified Data.Map as Map
 import Data.Set hiding ( toList, map )
 import qualified Data.Set as Set
 import Data.Foldable
-import Data.Sequence hiding ( zip )
+import Data.Sequence (Seq)
 import Generics.SOP
 import Data.Typeable
 import Control.Monad
-
+import Data.List
 
 instance Generic (Tree a)
 
@@ -42,14 +42,17 @@ instance Observe a => Observe [a]
 instance Observe a => Observe (Maybe a)
 instance (Observe a, Observe b) => Observe (Either a b)
 
+-- TODO: Custom prettyD for tuples
+
 instance Observe Integer where
   type Demand Integer = Prim Integer
   projectD    = projectPrim
   embedD      = embedPrim
   withFieldsD = withFieldsPrim
   matchD      = matchPrim
+  prettyD     = prettyPrim
 
-instance (Observe v, Typeable k, Ord k) => Observe (Map k v) where
+instance (Observe v, Typeable k, Ord k, Show k) => Observe (Map k v) where
   type Demand (Map k v) = Map k `Containing` v
   projectD = projectContainer
   embedD   = embedContainer
@@ -65,6 +68,24 @@ instance (Observe v, Typeable k, Ord k) => Observe (Map k v) where
                     else Nothing)
                  (assocs m)
                  (assocs n)
+  prettyD (Container m) =
+    CustomD 10 $
+      [ Left (Right ("Data.Map", "fromList"))
+      , Left (Left " [")
+      ] ++
+      ( concat @[]
+      . intersperse [Left (Left ", ")]
+      . fmap prettyKeyVal
+      $ assocs (fmap unK m)
+      ) ++
+      [ Left (Left "]")
+      ]
+    where
+      prettyKeyVal (k, x) =
+        [ Left (Left $ "(" ++ show k ++ ", ")
+        , Right (0, x)
+        , Left (Left ")")
+        ]
 
 -- instance Observe a => Observe (Seq a) where
 --   type Demand (Seq a) = Seq `Containing` a

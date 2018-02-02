@@ -22,6 +22,8 @@ import Data.Fix
 import Type.Reflection
 import Data.Functor.Product
 import Data.Constraint
+import Text.Show
+import Data.Monoid ( Endo(..) )
 import qualified Unsafe.Coerce as UNSAFE
 
 import Test.StrictCheck.Curry
@@ -77,16 +79,10 @@ class Typeable a => Observe (a :: *) where
          -> Demand a f -> Demand a g -> Maybe (Demand a h)
   matchD = gMatchD
 
-  -- prettyD :: Demand a f -> [x] -> PrettyDemand string x
-
-  -- prettyD :: Demand a g
-  --         -> [PrettyDemand f QConstructorName]
-  --         -> PrettyDemand f QConstructorName
-  -- default prettyD :: (GObserve a, HasDatatypeInfo a)
-  --   => Demand a f
-  --   -> [PrettyDemand f QConstructorName]
-  --   -> PrettyDemand f QConstructorName
-  -- prettyD = gPrettyD
+  prettyD :: Demand a (K x) -> PrettyD x
+  default prettyD :: (GObserve a, HasDatatypeInfo a)
+          => Demand a (K x) -> PrettyD x
+  prettyD = gPrettyD
 
 -- TODO: Put the stuff below here somewhere else
 
@@ -161,14 +157,14 @@ unzipField split =
               (F . fmap (mapD @x (\(Pair _ r) -> r)))
       . (\(Pair l r) -> (l, r))
 
--- prettyField :: forall a f. (Observe a, Functor f) => Field f a
---             -> f (Fix (PrettyDemand f QConstructorName))
--- prettyField = unK . foldD oneLevel
---   where
---     oneLevel :: forall x. Observe x
---              => f (Demand x (K (f (Fix (PrettyDemand f QConstructorName)))))
---              -> K (f (Fix (PrettyDemand f QConstructorName))) x
---     oneLevel = K . fmap @f (Fix . prettyD @x)
+prettyField :: forall a f. (Observe a, Functor f)
+  => Field f a -> PrettyField f
+prettyField = unK . foldD oneLevel
+  where
+    oneLevel :: forall x. Observe x
+             => f (Demand x (K (PrettyField f)))
+             -> K (PrettyField f) x
+    oneLevel = K . PF . fmap (prettyD @x)
 
 
 ------------------------------------------------------
@@ -243,30 +239,72 @@ observe context function =
 -- Pretty-printing demands --
 -----------------------------
 
--- data PrettyDemand f string =
---     Algebraic string (Either [f (PrettyDemand f string)]
---                            [(string, f (PrettyDemand f string))])
---   | Abstract string [Either String (Int, f (PrettyDemand f string))]
---   deriving (Eq, Ord, Show)
+data PrettyD x = ConstructorD QName [x]
+               | InfixD QName Associativity Fixity x x
+               | RecordD QName [(QName, x)]
+               | CustomD Fixity
+                   [Either (Either String (ModuleName, String))
+                           (Fixity, x)]
+               deriving (Eq, Ord, Show, Functor)
 
--- instance Functor f => Functor (PrettyDemand f string) where
---   fmap = second
+newtype PrettyField f =
+  PF (f (PrettyD (PrettyField f)))
 
--- instance Functor f => Bifunctor (PrettyDemand f) where
---   first f (Constr    name  (Left fields)) =
---            Constr (f name) (Left fields)
---   first f (Constr    name (Right fields)) =
---            Constr (f name) (Right $ (fmap (first f)) fields)
---   second f (Constr name (Left fields)) =
---             Constr name (Left $ (fmap (fmap f)) fields)
---   second f (Constr name (Right fields)) =
---             Constr name (Right $ fmap (second (fmap f)) fields)
+deriving instance Eq   (f (PrettyD (PrettyField f))) => Eq   (PrettyField f)
+deriving instance Ord  (f (PrettyD (PrettyField f))) => Ord  (PrettyField f)
+deriving instance Show (f (PrettyD (PrettyField f))) => Show (PrettyField f)
 
-type QConstructorName = (ModuleName, DatatypeName, ConstructorName)
+type QName = (ModuleName, DatatypeName, String)
 
--- TODO: More flexible pretty-type, to allow abstract types to be correctly
--- represented and displayed. This will require capturing info about
--- associativity and fixity.
+showPrettyFieldThunkS
+  :: Bool -> String -> Int -> PrettyField Thunk -> String -> String
+showPrettyFieldThunkS _            thunk _    (PF T)      = (thunk ++)
+showPrettyFieldThunkS qualifyNames thunk prec (PF (E pd)) =
+  case pd of
+    ConstructorD name fields ->
+      showParen (prec > 10) $
+        showString (qualify name)
+        . flip foldMapCompose fields
+          (((' ' :) .) . showPrettyFieldThunkS qualifyNames thunk 11)
+    RecordD name recfields ->
+      showParen (prec > 10) $
+        showString (qualify name)
+        . flip foldMapCompose recfields
+          (\(fName, x) ->
+             ((((" " ++ qualify fName ++ " = ") ++) .) $
+             showPrettyFieldThunkS qualifyNames thunk 11 x))
+    InfixD name assoc fixity l r ->
+      showParen (prec > fixity) $
+        let (lprec, rprec) =
+              case assoc of
+                LeftAssociative  -> (fixity,     fixity + 1)
+                RightAssociative -> (fixity + 1, fixity)
+                NotAssociative   -> (fixity + 1, fixity + 1)
+        in showPrettyFieldThunkS qualifyNames thunk lprec l
+         . showString (" " ++ qualify name ++ " ")
+         . showPrettyFieldThunkS qualifyNames thunk rprec r
+    CustomD fixity list ->
+      showParen (prec > fixity) $
+        foldr (.) id $ flip fmap list $
+          extractEither
+          . bimap (showString . qualifyEither)
+                  (\(f, pf) -> showPrettyFieldThunkS qualifyNames thunk f pf)
+  where
+    qualify (m, _, n) =
+      if qualifyNames then (m ++ "." ++ n) else n
+    qualifyEither (Left s) = s
+    qualifyEither (Right (m, n)) =
+      if qualifyNames then (m ++ "." ++ n) else n
+    extractEither (Left x)  = x
+    extractEither (Right x) = x
+
+-- This precedence-aware pretty-printing algorithm is adapted from a solution
+-- given by Brian Huffman on StackOverflow:
+-- https://stackoverflow.com/questions/27471937/showsprec-and-operator-precedences/43639618#43639618
+
+foldMapCompose :: (a -> (b -> b)) -> [a] -> (b -> b)
+foldMapCompose f = appEndo . foldMap (Endo . f)
+
 
 ---------------------------------------------------
 -- Generic implementation of the Observe methods --
@@ -336,40 +374,40 @@ gMatchD combine (GD df) (GD dg) =
     go (S fss) (S gss) = S <$> go fss gss
     go _       _       = Nothing
 
--- gPrettyD :: forall a x f. (HasDatatypeInfo a, GObserve a)
---          => Demand a (K (f x))
---          -> PrettyDemand f QConstructorName x
--- gPrettyD (GD demand) =
---   case info of
---     ADT m d cs ->
---       prettyC m d demand cs
---     Newtype m d c ->
---       prettyC m d demand (c :* Nil)
---   where
---     info = datatypeInfo (Proxy :: Proxy a)
+gPrettyD :: forall a x. (HasDatatypeInfo a, GObserve a)
+         => Demand a (K x) -> PrettyD x
+gPrettyD (GD demand) =
+  case info of
+    ADT m d cs ->
+      prettyC m d demand cs
+    Newtype m d c ->
+      prettyC m d demand (c :* Nil)
+  where
+    info = datatypeInfo (Proxy :: Proxy a)
 
---     prettyC :: forall as. ModuleName -> DatatypeName
---             -> NS (NP (K (f x))) as
---             -> NP ConstructorInfo as
---             -> PrettyDemand f QConstructorName x
---     prettyC m d subDemand constructors =
---       case (subDemand, constructors) of
---         (Z demandFields, c :* _) ->
---           case c of
---             Constructor name ->
---               Constr (m, d, name) . Left $
---                 hcollapse demandFields
---             Infix name _ _ ->
---               Constr (m, d, name) . Left $
---                 hcollapse demandFields
---             Record name fieldsInfo ->
---               Constr (m, d, name) . Right $
---                 zip ( hcollapse
---                     . hliftA (\(FieldInfo f) -> K (m, d, f))
---                     $ fieldsInfo )
---                     (hcollapse demandFields)
---         (S another, _ :* different) ->
---           prettyC m d another different
+    prettyC :: forall as. ModuleName -> DatatypeName
+            -> NS (NP (K x)) as
+            -> NP ConstructorInfo as
+            -> PrettyD x
+    prettyC m d subDemand constructors =
+      case (subDemand, constructors) of
+        (Z demandFields, c :* _) ->
+          case c of
+            Constructor name ->
+              ConstructorD (m, d, name) $
+                hcollapse demandFields
+            Infix name associativity fixity ->
+              case demandFields of
+                (K a :* K b :* Nil) ->
+                  InfixD (m, d, name) associativity fixity a b
+            Record name fieldsInfo ->
+              RecordD (m, d, name) $
+                zip ( hcollapse
+                    . hliftA (\(FieldInfo f) -> K (m, d, f))
+                    $ fieldsInfo )
+                    (hcollapse demandFields)
+        (S another, _ :* different) ->
+          prettyC m d another different
 
 --------------------------------------
 -- Deriving instances for things... --
@@ -378,8 +416,13 @@ gMatchD combine (GD df) (GD dg) =
 deriving instance GHC.Generic (Field f a)
 deriving instance (Eq     (f (Demand a (Field f)))) => Eq     (Field f a)
 deriving instance (Ord    (f (Demand a (Field f)))) => Ord    (Field f a)
-deriving instance (Show   (f (Demand a (Field f)))) => Show   (Field f a)
+-- deriving instance (Show   (f (Demand a (Field f)))) => Show   (Field f a)
 deriving instance (NFData (f (Demand a (Field f)))) => NFData (Field f a)
+
+instance Observe a => Show (Field Thunk a) where
+  showsPrec d field =
+    showParen (d > 10) $
+      showPrettyFieldThunkS False "_" d (prettyField field)
 
 deriving instance GHC.Generic (GDemand a f)
 deriving instance ( SListI (Code a)
