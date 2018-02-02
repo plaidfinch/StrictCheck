@@ -18,6 +18,8 @@ import Data.Sequence
 import Generics.SOP
 import Data.Coerce
 
+instance Generic (Tree a)
+
 instance Consume ()
 instance (Consume a, Consume b) => Consume (a, b)
 instance (Consume a) => Consume [a]
