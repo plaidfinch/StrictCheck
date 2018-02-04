@@ -52,7 +52,7 @@ library
                         TupleSections, TypeFamilyDependencies,
                         MultiParamTypeClasses
 -- Do something about type defaults?
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fno-warn-unticked-promoted-constructors
 
 -- executable StrictCheck-exe
 --   hs-source-dirs:      app
