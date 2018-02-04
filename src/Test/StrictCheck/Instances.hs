@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-unused-imports #-}
 
 module Test.StrictCheck.Instances where
 
@@ -36,56 +36,64 @@ instance (Consume v) => Consume (Seq v) where
 instance (Consume v) => Consume (Set v) where
   consume = fields . map consume . Set.toList
 
-instance Observe ()
-instance (Observe a, Observe b) => Observe (a, b)
-instance Observe a => Observe [a]
-instance Observe a => Observe (Maybe a)
-instance (Observe a, Observe b) => Observe (Either a b)
+-- instance Observe ()
+-- instance (Observe a, Observe b) => Observe (a, b)
+-- instance Observe a => Observe [a]
+-- instance Observe a => Observe (Maybe a)
+-- instance (Observe a, Observe b) => Observe (Either a b)
 
--- TODO: Custom prettyD for tuples
+-- -- TODO: Custom prettyD for tuples
 
-instance Observe Integer where
-  type Demand Integer = Prim Integer
-  projectD    = projectPrim
-  embedD      = embedPrim
-  withFieldsD = withFieldsPrim
-  matchD      = matchPrim
-  prettyD     = prettyPrim
+-- instance Observe Integer where
+--   type Demand Integer = Prim Integer
+--   projectD    = projectPrim
+--   embedD      = embedPrim
+--   withFieldsD = withFieldsPrim
+--   matchD      = matchPrim
+--   prettyD     = prettyPrim
 
-instance (Observe v, Typeable k, Ord k, Show k) => Observe (Map k v) where
-  type Demand (Map k v) = Map k `Containing` v
-  projectD = projectContainer
-  embedD   = embedContainer
-  withFieldsD =
-    withFieldsContainer $ \m k ->
-      k (Map.elems m) (Map.fromList . zip (keys m))
-  matchD =
-    matchContainer $ \f m n ->
-      Map.fromList <$>
-        zipWithM (\(kM, vM) (kN, vN) ->
-                    if kM == kN
-                    then Just (kM, f vM vN)
-                    else Nothing)
-                 (assocs m)
-                 (assocs n)
-  prettyD (Container m) =
-    CustomD 10 $
-      [ Left (Right ("Data.Map", "fromList"))
-      , Left (Left " [")
-      ] ++
-      ( concat @[]
-      . intersperse [Left (Left ", ")]
-      . fmap prettyKeyVal
-      $ assocs (fmap unK m)
-      ) ++
-      [ Left (Left "]")
-      ]
-    where
-      prettyKeyVal (k, x) =
-        [ Left (Left $ "(" ++ show k ++ ", ")
-        , Right (0, x)
-        , Left (Left ")")
-        ]
+-- instance (Typeable a, Typeable b) => Observe (a -> b) where
+--   type Demand (a -> b) = Opaque (a -> b)
+--   projectD    = projectOpaque
+--   embedD      = embedOpaque
+--   withFieldsD = withFieldsOpaque
+--   matchD      = matchOpaque
+--   prettyD _   = prettyConstant "<function>"
+
+-- instance (Observe v, Typeable k, Ord k, Show k) => Observe (Map k v) where
+--   type Demand (Map k v) = Map k `Containing` v
+--   projectD = projectContainer
+--   embedD   = embedContainer
+--   withFieldsD =
+--     withFieldsContainer $ \m k ->
+--       k (Map.elems m) (Map.fromList . zip (keys m))
+--   matchD =
+--     matchContainer $ \f m n ->
+--       Map.fromList <$>
+--         zipWithM (\(kM, vM) (kN, vN) ->
+--                     if kM == kN
+--                     then Just (kM, f vM vN)
+--                     else Nothing)
+--                  (assocs m)
+--                  (assocs n)
+--   prettyD (Container m) =
+--     CustomD 10 $
+--       [ Left (Right ("Data.Map", "fromList"))
+--       , Left (Left " [")
+--       ] ++
+--       ( concat @[]
+--       . intersperse [Left (Left ", ")]
+--       . fmap prettyKeyVal
+--       $ assocs (fmap unK m)
+--       ) ++
+--       [ Left (Left "]")
+--       ]
+--     where
+--       prettyKeyVal (k, x) =
+--         [ Left (Left $ "(" ++ show k ++ ", ")
+--         , Right (0, x)
+--         , Left (Left ")")
+--         ]
 
 -- instance Observe a => Observe (Seq a) where
 --   type Demand (Seq a) = Seq `Containing` a

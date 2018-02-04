@@ -24,6 +24,7 @@ import Data.Functor.Product
 import Data.Constraint
 import Text.Show
 import Data.Monoid ( Endo(..) )
+import Data.Void
 import qualified Unsafe.Coerce as UNSAFE
 
 import Test.StrictCheck.Curry
@@ -55,51 +56,62 @@ class Typeable a => Observe (a :: *) where
          => (forall x. Observe x => f x -> x) -> Demand a f -> a
   embedD = gEmbedD
 
-  withFieldsD
-    :: Demand a f
-    -> (forall xs. All Observe xs
-          => NP f xs
-          -> (forall g. NP g xs -> Demand a g)
-          -> result)
-    -> result
-  default withFieldsD
-    :: GObserve a
-    => Demand a f
-    -> (forall xs. All Observe xs
-          => NP f xs
-          -> (forall g. NP g xs -> Demand a g)
-          -> result)
-    -> result
-  withFieldsD = gWithFieldsD
+  -- TODO: Derive matchD generically
 
-  matchD :: (forall x. f x -> g x -> h x)
-         -> Demand a f -> Demand a g -> Maybe (Demand a h)
+  -- NOTE: new behavior should be to succeed whenever the same "constructor" was
+  -- used -- either a literal constructor of a figurative one: map with exactly
+  -- the same keys, *any* function considered same constructor...
+  matchD :: Demand a f
+         -> (forall xs. All Observe xs
+               => Flattened (Demand a) f xs
+               -> (forall g. Demand a g -> Maybe (Flattened (Demand a) g xs))
+               -> result)
+         -> result
   default matchD :: GObserve a
-         => (forall x. f x -> g x -> h x)
-         -> Demand a f -> Demand a g -> Maybe (Demand a h)
-  matchD = gMatchD
+         => Demand a f
+         -> (forall xs. All Observe xs
+               => Flattened (Demand a) f xs
+               -> (forall g. Demand a g -> Maybe (Flattened (Demand a) g xs))
+               -> result)
+         -> result
+  matchD _ _ = undefined --gMatchD
 
   prettyD :: Demand a (K x) -> PrettyD x
   default prettyD :: (GObserve a, HasDatatypeInfo a)
           => Demand a (K x) -> PrettyD x
   prettyD = gPrettyD
 
+data Flattened d f xs where
+  Flattened
+    :: (forall h. NP h xs -> d h)
+    -> NP f xs
+    -> Flattened d f xs
+
+unflatten :: Flattened d f xs -> d f
+unflatten (Flattened u p) = u p
+
+mapFlattened :: forall c d f g xs. All c xs
+  => (forall x. c x => f x -> g x) -> Flattened d f xs -> Flattened d g xs
+mapFlattened t (Flattened u p) =
+  Flattened u (hcliftA (Proxy :: Proxy c) t p)
+
+
 -- TODO: Put the stuff below here somewhere else
 
 mapD :: forall a f g. Observe a
       => (forall x. Observe x => f x -> g x)
       -> Demand a f -> Demand a g
-mapD t d = withFieldsD @a d $ \fields unflatten ->
-  unflatten (hcliftA (Proxy :: Proxy Observe) t fields)
+mapD t d = matchD @a d $ \flat _ ->
+  unflatten $ mapFlattened @Observe t flat
 
 
 shrinkField :: forall a. Observe a => Field Thunk a -> [Field Thunk a]
 shrinkField (F T)     = []
 shrinkField (F (E d)) =
-  withFieldsD @a d $ \np unflat ->
-    case shrinkOne np of
+  matchD @a d $ \(Flattened un flat) _ ->
+    case shrinkOne flat of
       [] -> [F T]
-      xs -> fmap (F . E . unflat) xs
+      xs -> fmap (F . E . un) xs
   where
     shrinkOne :: All Observe xs => NP (Field Thunk) xs -> [NP (Field Thunk) xs]
     shrinkOne Nil = []
@@ -338,41 +350,53 @@ gEmbedD :: GObserve a
 gEmbedD e (GD d) =
   to (hcliftA (Proxy :: Proxy Observe) (I . e) (SOP d))
 
-gWithFieldsD :: forall a f result. GObserve a
-  => Demand a f
-  -> (forall xs. All Observe xs
-        => NP f xs
-        -> (forall g. NP g xs -> Demand a g)
-        -> result)
-  -> result
-gWithFieldsD (GD d) cont =
-  go d (\fields unflatten -> cont fields (GD . unflatten))
-  where
-    go :: forall xss r.
-      (All SListI xss, All2 Observe xss)
-       => NS (NP f) xss
-       -> (forall xs. All Observe xs =>
-             (NP f xs -> (forall g. NP g xs -> NS (NP g) xss) -> r))
-       -> r
-    go (Z fields) k = k fields Z
-    go (S more)   k =
-      go more $ \fields unflatten ->
-        k fields (S . unflatten)
+-- gMatchD :: forall a f result. GObserve a
+--   => Demand a f
+--   -> (forall xs. All Observe xs
+--         => Flattened (Demand a) f xs
+--         -> (forall g. Demand a g -> Maybe (Flattened (Demand a) g xs))
+--         -> result)
+--   -> result
+-- gMatchD (GD df) cont =
+--   cont (makeFlattened df) (matchFlattened df)
+--   where
+--     makeFlattened ::
 
-gMatchD :: forall a f g h. GObserve a
-        => (forall x. f x -> g x -> h x)
-        -> Demand a f -> Demand a g
-        -> Maybe (Demand a h)
-gMatchD combine (GD df) (GD dg) =
-  GD <$> go df dg
-  where
-    go :: forall xss. All SListI xss
-       => NS (NP f) xss
-       -> NS (NP g) xss
-       -> Maybe (NS (NP h) xss)
-    go (Z fs)  (Z gs)  = Just (Z (hliftA2 combine fs gs))
-    go (S fss) (S gss) = S <$> go fss gss
-    go _       _       = Nothing
+-- gWithFieldsD :: forall a f result. GObserve a
+--   => Demand a f
+--   -> (forall xs. All Observe xs
+--         => NP f xs
+--         -> (forall g. NP g xs -> Demand a g)
+--         -> result)
+--   -> result
+-- gWithFieldsD (GD d) cont =
+--   go d (\fields un -> cont fields (GD . un))
+--   where
+--     go :: forall xss r.
+--       (All SListI xss, All2 Observe xss)
+--        => NS (NP f) xss
+--        -> (forall xs. All Observe xs =>
+--              (NP f xs -> (forall g. NP g xs -> NS (NP g) xss) -> r))
+--        -> r
+--     go (Z fields) k = k fields Z
+--     go (S more)   k =
+--       go more $ \fields un ->
+--         k fields (S . un)
+
+-- gMatchD :: forall a f g h. GObserve a
+--         => (forall x. f x -> g x -> h x)
+--         -> Demand a f -> Demand a g
+--         -> Maybe (Demand a h)
+-- gMatchD combine (GD df) (GD dg) =
+--   GD <$> go df dg
+--   where
+--     go :: forall xss. All SListI xss
+--        => NS (NP f) xss
+--        -> NS (NP g) xss
+--        -> Maybe (NS (NP h) xss)
+--     go (Z fs)  (Z gs)  = Just (Z (hliftA2 combine fs gs))
+--     go (S fss) (S gss) = S <$> go fss gss
+--     go _       _       = Nothing
 
 gPrettyD :: forall a x. (HasDatatypeInfo a, GObserve a)
          => Demand a (K x) -> PrettyD x
@@ -422,7 +446,7 @@ deriving instance (NFData (f (Demand a (Field f)))) => NFData (Field f a)
 instance Observe a => Show (Field Thunk a) where
   showsPrec d field =
     showParen (d > 10) $
-      showPrettyFieldThunkS False "_" d (prettyField field)
+      showPrettyFieldThunkS False "⯀" d (prettyField field)
 
 deriving instance GHC.Generic (GDemand a f)
 deriving instance ( SListI (Code a)

@@ -20,6 +20,8 @@ import Data.Monoid
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
 
+import GHC.TypeLits
+
 
 -------------------------------------------------------
 -- The user interface for creating Produce instances --

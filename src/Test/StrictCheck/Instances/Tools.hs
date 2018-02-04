@@ -64,7 +64,11 @@ matchPrim :: Eq a => (forall x. f x -> g x -> h x)
 matchPrim _ df dg = if df == (coerce dg) then (Just (coerce df)) else Nothing
 
 prettyPrim :: Show a => Prim a (K x) -> PrettyD x
-prettyPrim (Prim a) = CustomD 11 [Left (Left (show a))]
+prettyPrim (Prim a) = prettyConstant (show a)
+
+prettyConstant :: String -> PrettyD x
+prettyConstant s = CustomD 11 [Left (Left s)]
+
 
 -- TODO: What about demands for abstract types with > 1 type of unbounded-count field?
 
@@ -85,9 +89,11 @@ withFieldsContainer ::
   -> result
 withFieldsContainer viaContaining (Container c) cont =
   viaContaining c $
-    \list unflatten ->
-       withNP @Observe list (Container . unflatten) cont
+    \list un ->
+       withNP @Observe list (Container . un) cont
 
+-- TODO: Make this work for any number of lists of fields, by carefully using
+-- unsafeCoerce to deal with unknown list lengths
 withFieldsViaList ::
   forall demand f result.
      (forall r h.
@@ -105,8 +111,8 @@ withFieldsViaList ::
   -> result
 withFieldsViaList viaList demand cont =
   viaList demand $
-    \list unflatten ->
-       withNP @Observe list unflatten cont
+    \list un ->
+       withNP @Observe list un cont
 
 withNP :: forall c demand result f x. c x
        => [f x]
