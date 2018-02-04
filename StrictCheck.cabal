@@ -50,7 +50,8 @@ library
                         FlexibleInstances, StandaloneDeriving, DeriveGeneric,
                         DeriveAnyClass, TypeOperators, PolyKinds, LambdaCase,
                         TupleSections, TypeFamilyDependencies,
-                        MultiParamTypeClasses
+                        MultiParamTypeClasses, DerivingStrategies,
+                        GeneralizedNewtypeDeriving
 -- Do something about type defaults?
   ghc-options:         -Wall -fno-warn-unticked-promoted-constructors
 

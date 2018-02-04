@@ -112,18 +112,18 @@ instance Consume Integer where
   consume = consumePrimitive
 
 instance (Produce a, Produce b) => Produce (a, b) where
-  produce inputs =
-    (,) <$> recur inputs <*> recur inputs
+  produce =
+    (,) <$> field <*> field
 
-instance (Produce a) => Produce [a] where
-  produce inputs = do
-    frequency [ (1, return [])
-              , (1, (:) <$> recur inputs
-                        <*> recur inputs)
-              ]
+-- instance (Produce a) => Produce [a] where
+--   produce =
+--     frequency [ (1, return [])
+--               , (1, (:) <$> field
+--                         <*> field)
+--               ]
 
-instance (Produce a) => Produce (Tree a) where
-  produce input =
-    Node <$> recur input
-         <*> frequency [ (1, return [])
-                       , (2, recur input) ]
+-- instance (Produce a) => Produce (Tree a) where
+--   produce input =
+--     Node <$> recur input
+--          <*> frequency [ (1, return [])
+--                        , (2, recur input) ]

@@ -1,57 +1,74 @@
 module Test.StrictCheck.Produce
   ( Produce(..)
-  , recur
+  , part
+  , field
   , producePrimitive
-  , Lazy(..)
-  , lazy
+  -- , Lazy(..)
+  , returning
+  , returning1
+  , Producing
+  , runProducing
   , Input
   , Inputs
   ) where
 
-import Test.QuickCheck
+import Test.QuickCheck hiding (Args, Result)
 import Test.QuickCheck.Gen.Unsafe
 
 import           Data.Urn ( Urn, Weight )
 import qualified Data.Urn          as Urn
 import qualified Data.Urn.Internal as Urn ( uninsert )
 
-import Data.Monoid
+import Data.Monoid ((<>))
 
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
+import Test.StrictCheck.Curry
+import Test.StrictCheck.Curry.Function
 
-import GHC.TypeLits
+import Control.Monad.Reader
+
+import Generics.SOP
 
 
 -------------------------------------------------------
 -- The user interface for creating Produce instances --
 -------------------------------------------------------
 
+newtype Producing b =
+  Producing (ReaderT Inputs Gen b)
+  deriving newtype (Functor, Applicative, Monad)
+
+runProducing :: Producing b -> Inputs -> Gen b
+runProducing (Producing r) i = runReaderT r i
+
+part :: Producing b -> Producing b
+part produceWhole =
+  Producing . ReaderT $ \(Inputs is) ->
+    do (vs, is') <- unzip <$> mapM draws is
+       vary (mconcat vs) $
+         runProducing produceWhole (Inputs is')
+
 -- | Produce an arbitrary construction, but using Inputs to drive the
 -- implicit destruction of the original input value.
 class Produce b where
-  produce :: Inputs -> Gen b
+  produce :: Producing b
 
 -- | Destruct some inputs to generate an output. This function handles the
 -- interleaving of input destruction with output construction. It should always
 -- be immediately called (on the supplied Inputs) at every recursive position
-recur :: Produce a => Inputs -> Gen a
-recur (Inputs is) = do
-  (vs, is') <- unzip <$> mapM draws is
-  vary (mconcat vs) $ produce (Inputs is')
+field :: Produce a => Producing a
+field = part produce
 
 -- | Use the Arbitrary instance for a type to produce it. This should only be
 -- used for "flat" types, i.e. those which contain no interesting substructure.
-producePrimitive :: Arbitrary b => Inputs -> Gen b
-producePrimitive _ = arbitrary
+producePrimitive :: Arbitrary b => Producing b
+producePrimitive = Producing . ReaderT $ const arbitrary
 
 
 ---------------------------------------
 -- How to make random lazy functions --
 ---------------------------------------
-
--- NOTE: You may be tempted to call produce instead of recur here, but this will
--- mean that all of your functions will be 1st-output-lazy. Thus, we use recur.
 
 -- NOTE: This instance must be defined in this module, as it has to break the
 -- abstraction of the Inputs type. No other instance needs to break this.
@@ -59,9 +76,21 @@ producePrimitive _ = arbitrary
 -- to use promote to make a function.
 
 instance (Consume a, Produce b) => Produce (a -> b) where
-  produce (Inputs inputs) =
+  produce = returning1 produce
+
+returning1 :: Consume a => Producing b -> Producing (a -> b)
+returning1 out =
+  Producing . ReaderT $ \(Inputs inputs) ->
     promote $ \a ->
-      recur (Inputs (consume a : inputs))
+      runProducing (part out) (Inputs (consume a : inputs))
+
+returning :: forall args result. (All Consume args, Curry args result, SListI args )
+          => Producing result -> Producing (args -..-> result)
+returning out =
+  Producing . ReaderT $ \(Inputs inputs) ->
+    fmap (curryFunction @args . toFunction) . promote $ \args ->
+      runProducing (part out) . Inputs . (++ inputs) $
+        hcollapse $ hcliftA (Proxy :: Proxy Consume) (K . consume . unI) args
 
 
 -------------------------------------------------------------------------
@@ -108,13 +137,13 @@ draws i =
 -- Integration with QuickCheck's Arbitrary --
 ---------------------------------------------
 
--- | We hook into QuickCheck's existing Arbitrary infrastructure by using
--- a newtype to differentiate our special way of generating things.
-newtype Lazy a = Lazy { runLazy :: a }
+-- -- | We hook into QuickCheck's existing Arbitrary infrastructure by using
+-- -- a newtype to differentiate our special way of generating things.
+-- newtype Lazy a = Lazy { runLazy :: a }
 
-instance Produce a => Arbitrary (Lazy a) where
-  arbitrary = Lazy <$> lazy
+-- instance Produce a => Arbitrary (Lazy a) where
+--   arbitrary = Lazy <$> lazy
 
--- | A universal generator for all that can be produced (including functions).
-lazy :: Produce a => Gen a
-lazy = produce (Inputs [])
+-- -- | A universal generator for all that can be produced (including functions).
+-- lazy :: Produce a => Gen a
+-- lazy = produce (Inputs [])

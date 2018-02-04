@@ -5,6 +5,7 @@ module Test.StrictCheck.Curry
   , Curry(..)
   , uncurryAll
   , curryAll
+  , withCurryIdentity
   ) where
 
 import Generics.SOP
@@ -37,6 +38,10 @@ curryIdentity :: forall function.
   function :~: (Args function -..-> Result function)
 curryIdentity = UNSAFE.unsafeCoerce (Refl :: () :~: ())
 
+withCurryIdentity :: forall function r.
+  (function ~ (Args function -..-> Result function) => r) -> r
+withCurryIdentity r = case curryIdentity @function of Refl -> r
+
 ----------------------------------------
 -- Partial uncurrying, Functionically --
 ----------------------------------------
@@ -48,7 +53,7 @@ class Curry (args :: [*]) (result :: *) where
    curryFunction   :: Function args result -> (args -..-> result)
 
 -- | We can always move back and forth between a (Res x) and an x
-instance Result x ~ x => Curry '[] x where
+instance Curry '[] x where
   uncurryFunction    x  = Res x
   curryFunction (Res x) =     x
 
@@ -69,8 +74,7 @@ uncurryAll :: forall function.
            => function
            -> (NP I (Args function) -> Result function)
 uncurryAll =
-  case curryIdentity @function of
-    Refl -> applyFunction . uncurryFunction
+  withCurryIdentity @function $ applyFunction . uncurryFunction
 
 curryAll :: forall args result.
          (Curry args result, SListI args)
