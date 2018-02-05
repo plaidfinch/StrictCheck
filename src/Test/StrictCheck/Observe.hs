@@ -26,6 +26,7 @@ import Text.Show
 import Data.Monoid ( Endo(..) )
 import Data.Void
 import qualified Unsafe.Coerce as UNSAFE
+import Data.Coerce
 
 import Test.StrictCheck.Curry
 
@@ -61,20 +62,20 @@ class Typeable a => Observe (a :: *) where
   -- NOTE: new behavior should be to succeed whenever the same "constructor" was
   -- used -- either a literal constructor of a figurative one: map with exactly
   -- the same keys, *any* function considered same constructor...
-  matchD :: Demand a f
+  matchD :: Demand a f -> Demand a g
          -> (forall xs. All Observe xs
                => Flattened (Demand a) f xs
-               -> (forall g. Demand a g -> Maybe (Flattened (Demand a) g xs))
+               -> Maybe (Flattened (Demand a) g xs)
                -> result)
          -> result
   default matchD :: GObserve a
-         => Demand a f
+         => Demand a f -> Demand a g
          -> (forall xs. All Observe xs
                => Flattened (Demand a) f xs
-               -> (forall g. Demand a g -> Maybe (Flattened (Demand a) g xs))
+               -> Maybe (Flattened (Demand a) g xs)
                -> result)
          -> result
-  matchD _ _ = undefined --gMatchD
+  matchD = gMatchD
 
   prettyD :: Demand a (K x) -> PrettyD x
   default prettyD :: (GObserve a, HasDatatypeInfo a)
@@ -101,14 +102,14 @@ mapFlattened t (Flattened u p) =
 mapD :: forall a f g. Observe a
       => (forall x. Observe x => f x -> g x)
       -> Demand a f -> Demand a g
-mapD t d = matchD @a d $ \flat _ ->
+mapD t d = matchD @a d d $ \flat _ ->
   unflatten $ mapFlattened @Observe t flat
 
 
 shrinkField :: forall a. Observe a => Field Thunk a -> [Field Thunk a]
 shrinkField (F T)     = []
 shrinkField (F (E d)) =
-  matchD @a d $ \(Flattened un flat) _ ->
+  matchD @a d d $ \(Flattened un flat) _ ->
     case shrinkOne flat of
       [] -> [F T]
       xs -> fmap (F . E . un) xs
@@ -312,7 +313,7 @@ showPrettyFieldThunkS qualifyNames thunk prec (PF (E pd)) =
 
 -- This precedence-aware pretty-printing algorithm is adapted from a solution
 -- given by Brian Huffman on StackOverflow:
--- https://stackoverflow.com/questions/27471937/showsprec-and-operator-precedences/43639618#43639618
+-- https://stackoverflow.com/questions/27471937/43639618#43639618
 
 foldMapCompose :: (a -> (b -> b)) -> [a] -> (b -> b)
 foldMapCompose f = appEndo . foldMap (Endo . f)
@@ -350,17 +351,61 @@ gEmbedD :: GObserve a
 gEmbedD e (GD d) =
   to (hcliftA (Proxy :: Proxy Observe) (I . e) (SOP d))
 
--- gMatchD :: forall a f result. GObserve a
---   => Demand a f
---   -> (forall xs. All Observe xs
---         => Flattened (Demand a) f xs
---         -> (forall g. Demand a g -> Maybe (Flattened (Demand a) g xs))
---         -> result)
---   -> result
--- gMatchD (GD df) cont =
---   cont (makeFlattened df) (matchFlattened df)
---   where
---     makeFlattened ::
+gMatchD :: forall a f g result. GObserve a
+        => Demand a f -> Demand a g
+        -> (forall xs. All Observe xs
+              => Flattened (Demand a) f xs
+              -> Maybe (Flattened (Demand a) g xs)
+              -> result)
+        -> result
+gMatchD (GD df) (GD dg) cont =
+  go @(Code a) df (Just dg) $ \flatF mflatG ->
+    cont (flatGD flatF) (flatGD <$> mflatG)
+  where
+    go :: forall xss r.
+      (All SListI xss, All2 Observe xss)
+       => NS (NP f) xss
+       -> Maybe (NS (NP g) xss)
+       -> (forall xs. All Observe xs
+             => Flattened (Flip SOP xss) f xs
+             -> Maybe (Flattened (Flip SOP xss) g xs)
+             -> r)
+       -> r
+    go (Z (fieldsF :: _ xs)) (Just (Z fieldsG)) k =
+      k @xs (flatZ fieldsF)  (Just (flatZ fieldsG))
+    go (Z (fieldsF :: _ xs)) _ k =   -- Nothing | Just (S _)
+      k @xs (flatZ fieldsF)  Nothing
+    go (S moreF) Nothing k =
+      go moreF Nothing $ \(flatF :: _ xs) _ ->
+        k @xs (flatS flatF) Nothing
+    go (S moreF) (Just (Z _)) k =
+      go moreF Nothing $ \(flatF :: _ xs) _ ->
+        k @xs (flatS flatF) Nothing
+    go (S moreF) (Just (S moreG)) k =
+      go moreF (Just moreG) $ \(flatF :: _ xs) mflatG ->
+        k @xs (flatS flatF) (flatS <$> mflatG)
+
+    flatZ
+      :: forall h xs xss. NP h xs -> Flattened (Flip SOP (xs : xss)) h xs
+    flatZ = Flattened (Flip . SOP . Z)
+
+    flatS
+      :: forall h xs xs' xss.
+      Flattened (Flip SOP xss) h xs
+      -> Flattened (Flip SOP (xs' : xss)) h xs
+    flatS (Flattened un fields) =
+      Flattened (Flip . SOP . S . coerce . un) fields
+
+    flatGD :: forall t h xs.
+      Flattened (Flip SOP (Code t)) h xs -> Flattened (GDemand t) h xs
+    flatGD (Flattened un fields) =
+      Flattened (GD . coerce . un) fields
+
+
+newtype Flip f a b = Flip (f b a)
+
+unFlip :: Flip f a b -> f b a
+unFlip (Flip fba) = fba
 
 -- gWithFieldsD :: forall a f result. GObserve a
 --   => Demand a f
@@ -441,12 +486,12 @@ deriving instance GHC.Generic (Field f a)
 deriving instance (Eq     (f (Demand a (Field f)))) => Eq     (Field f a)
 deriving instance (Ord    (f (Demand a (Field f)))) => Ord    (Field f a)
 -- deriving instance (Show   (f (Demand a (Field f)))) => Show   (Field f a)
-deriving instance (NFData (f (Demand a (Field f)))) => NFData (Field f a)
+deriving newtype instance (NFData (f (Demand a (Field f)))) => NFData (Field f a)
 
 instance Observe a => Show (Field Thunk a) where
   showsPrec d field =
     showParen (d > 10) $
-      showPrettyFieldThunkS False "⯀" d (prettyField field)
+      showPrettyFieldThunkS False "_" d (prettyField field)
 
 deriving instance GHC.Generic (GDemand a f)
 deriving instance ( SListI (Code a)
@@ -459,6 +504,6 @@ deriving instance ( SListI (Code a)
 deriving instance ( SListI (Code a)
                   , All (Compose Show (NP f)) (Code a)
                   ) => Show (GDemand a f)
-deriving instance ( SListI (Code a)
+deriving newtype instance ( SListI (Code a)
                   , All (Compose NFData (NP f)) (Code a)
                   ) => NFData (GDemand a f)

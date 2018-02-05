@@ -11,7 +11,8 @@ import Data.Coerce
 
 newtype Containing h a f =
   Container (h (f a))
-  deriving (Eq, Ord, Show, GHC.Generic, NFData)
+  deriving (Eq, Ord, Show, GHC.Generic)
+  deriving newtype NFData
 
 projectContainer :: (Functor c, Observe a)
   => (forall x. Observe x => x -> f x)
@@ -40,7 +41,8 @@ matchContainer onContainer combine (Container cf) (Container cg) =
 -- | Convenience type for representing demands upon primitive types (i.e. Int)
 
 newtype Prim (x :: *) (f :: * -> *) = Prim x
-  deriving (Eq, Ord, Show, GHC.Generic, NFData)
+  deriving (Eq, Ord, Show, GHC.Generic)
+  deriving newtype NFData
 
 unPrim :: Prim x f -> x
 unPrim (Prim x) = x
@@ -51,17 +53,29 @@ projectPrim _ = Prim
 embedPrim :: (forall x. Observe x => f x -> x) -> Prim a f -> a
 embedPrim _ = unPrim
 
-withFieldsPrim :: Prim a f
-               -> (forall xs. All Observe xs
-                     => NP f xs
-                     -> (forall g. NP g xs -> Prim a g)
-                     -> result)
-               -> result
-withFieldsPrim p k = k Nil (const (coerce p))
+matchPrim :: Eq a => Prim a f -> Prim a g
+           -> (forall xs. All Observe xs
+                => Flattened (Prim a) f xs
+                -> Maybe (Flattened (Prim a) g xs)
+                -> result)
+           -> result
+matchPrim (Prim a) (Prim b) k =
+  k (flatPrim a)
+     (if a == b then (Just (flatPrim b)) else Nothing)
+  where
+    flatPrim x = Flattened (const (Prim x)) Nil
 
-matchPrim :: Eq a => (forall x. f x -> g x -> h x)
-          -> Prim a f -> Prim a g -> Maybe (Prim a h)
-matchPrim _ df dg = if df == (coerce dg) then (Just (coerce df)) else Nothing
+-- withFieldsPrim :: Prim a f
+--                -> (forall xs. All Observe xs
+--                      => NP f xs
+--                      -> (forall g. NP g xs -> Prim a g)
+--                      -> result)
+--                -> result
+-- withFieldsPrim p k = k Nil (const (coerce p))
+
+-- matchPrim :: Eq a => (forall x. f x -> g x -> h x)
+--           -> Prim a f -> Prim a g -> Maybe (Prim a h)
+-- matchPrim _ df dg = if df == (coerce dg) then (Just (coerce df)) else Nothing
 
 prettyPrim :: Show a => Prim a (K x) -> PrettyD x
 prettyPrim (Prim a) = prettyConstant (show a)

@@ -36,21 +36,20 @@ instance (Consume v) => Consume (Seq v) where
 instance (Consume v) => Consume (Set v) where
   consume = fields . map consume . Set.toList
 
--- instance Observe ()
--- instance (Observe a, Observe b) => Observe (a, b)
--- instance Observe a => Observe [a]
--- instance Observe a => Observe (Maybe a)
--- instance (Observe a, Observe b) => Observe (Either a b)
+instance Observe ()
+instance (Observe a, Observe b) => Observe (a, b)
+instance Observe a => Observe [a]
+instance Observe a => Observe (Maybe a)
+instance (Observe a, Observe b) => Observe (Either a b)
 
 -- -- TODO: Custom prettyD for tuples
 
--- instance Observe Integer where
---   type Demand Integer = Prim Integer
---   projectD    = projectPrim
---   embedD      = embedPrim
---   withFieldsD = withFieldsPrim
---   matchD      = matchPrim
---   prettyD     = prettyPrim
+instance Observe Integer where
+  type Demand Integer = Prim Integer
+  projectD    = projectPrim
+  embedD      = embedPrim
+  matchD      = matchPrim
+  prettyD     = prettyPrim
 
 -- instance (Typeable a, Typeable b) => Observe (a -> b) where
 --   type Demand (a -> b) = Opaque (a -> b)
