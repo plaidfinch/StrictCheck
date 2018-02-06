@@ -19,7 +19,6 @@ import qualified Data.Urn          as Urn
 import qualified Data.Urn.Internal as Urn ( uninsert )
 
 import Data.Monoid ((<>))
-import Control.Monad
 
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
@@ -43,13 +42,15 @@ class Produce b where
 -- be immediately called (on the supplied Inputs) at every recursive position
 producing :: (Inputs -> Gen a) -> Inputs -> Gen a
 producing part (Inputs inputs) = do
-  (variants, inputs') <-
-     foldM accumInput mempty =<< shuffle inputs
+  (variants, inputs') <- drawInputs =<< shuffle inputs
   vary variants $ part (Inputs inputs')
   where
-    accumInput (vs, is) i = do
-      (v, i') <- vary vs $ draws i
-      return (v <> vs, i' : is)
+    drawInputs :: [Input] -> Gen (Variant, [Input])
+    drawInputs      []  = return mempty
+    drawInputs (i : is) = do
+      (v,  i')  <- draws i
+      (vs, is') <- vary v $ drawInputs is
+      return (v <> vs, i' : is')
 
 recur :: Produce a => Inputs -> Gen a
 recur = producing produce
@@ -58,20 +59,6 @@ recur = producing produce
 -- used for "flat" types, i.e. those which contain no interesting substructure.
 producePrimitive :: Arbitrary b => Inputs -> Gen b
 producePrimitive _ = arbitrary
-
-returning :: Consume a => (Inputs -> Gen b) -> Inputs -> Gen (a -> b)
-returning out =
-  \(Inputs inputs) ->
-    promote $ \a ->
-      producing out (Inputs (consume a : inputs))
-
-variadic :: forall args result. (All Consume args, Curry args result, SListI args )
-         => (Inputs -> Gen result) -> Inputs -> Gen (args ⋯-> result)
-variadic out =
-  \(Inputs inputs) ->
-    fmap (curryFunction @args . toFunction) . promote $ \args ->
-      producing out . Inputs . (++ inputs) $
-        hcollapse $ hcliftA (Proxy :: Proxy Consume) (K . consume . unI) args
 
 
 ---------------------------------------
@@ -87,9 +74,22 @@ variadic out =
 -- to use promote to make a function.
 
 instance (Consume a, Produce b) => Produce (a -> b) where
-  produce (Inputs inputs) =
+  produce = returning produce
+
+returning :: Consume a => (Inputs -> Gen b) -> Inputs -> Gen (a -> b)
+returning out =
+  \(Inputs inputs) ->
     promote $ \a ->
-      recur (Inputs (consume a : inputs))
+      producing out (Inputs (consume a : inputs))
+
+variadic ::
+  forall args result. (All Consume args, Curry args result, SListI args)
+         => (Inputs -> Gen result) -> Inputs -> Gen (args ⋯-> result)
+variadic out =
+  \(Inputs inputs) ->
+    fmap (curryFunction @args . toFunction) . promote $ \args ->
+      producing out . Inputs . (++ inputs) $
+        hcollapse $ hcliftA (Proxy :: Proxy Consume) (K . consume . unI) args
 
 
 -------------------------------------------------------------------------
@@ -130,6 +130,9 @@ draws i =
         , do (v, i')   <- draw i
              (v', i'') <- vary v $ draws i'
              return (v <> v', i'') ]
+
+-- TODO: Allow the user to tune how biased towards strictness things are?
+-- What should the default be?
 
 
 ---------------------------------------------
