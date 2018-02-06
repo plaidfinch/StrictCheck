@@ -53,18 +53,6 @@ matchPrim (Prim a) (Prim b) k =
   where
     flatPrim x = Flattened (const (Prim x)) Nil
 
--- withFieldsPrim :: Prim a f
---                -> (forall xs. All Observe xs
---                      => NP f xs
---                      -> (forall g. NP g xs -> Prim a g)
---                      -> result)
---                -> result
--- withFieldsPrim p k = k Nil (const (coerce p))
-
--- matchPrim :: Eq a => (forall x. f x -> g x -> h x)
---           -> Prim a f -> Prim a g -> Maybe (Prim a h)
--- matchPrim _ df dg = if df == (coerce dg) then (Just (coerce df)) else Nothing
-
 prettyPrim :: Show a => Prim a (K x) -> PrettyD x
 prettyPrim (Prim a) = prettyConstant (show a)
 
@@ -74,25 +62,25 @@ prettyConstant s = CustomD 11 [Left (Left s)]
 
 -- TODO: What about demands for abstract types with > 1 type of unbounded-count field?
 
-withFieldsContainer ::
-  forall c a f result.
-     (forall r h.
-        c (h a) ->
-        (forall x. Observe x
-           => [h x]
-           -> (forall g. [g x] -> c (g a))
-           -> r)
-        -> r)
-  -> Containing c a f
-  -> (forall xs. All Observe xs
-        => NP f xs
-        -> (forall g. NP g xs -> Containing c a g)
-        -> result)
-  -> result
-withFieldsContainer viaContaining (Container c) cont =
-  viaContaining c $
-    \list un ->
-       withNP @Observe list (Container . un) cont
+-- withFieldsContainer ::
+--   forall c a f result.
+--      (forall r h.
+--         c (h a) ->
+--         (forall x. Observe x
+--            => [h x]
+--            -> (forall g. [g x] -> c (g a))
+--            -> r)
+--         -> r)
+--   -> Containing c a f
+--   -> (forall xs. All Observe xs
+--         => NP f xs
+--         -> (forall g. NP g xs -> Containing c a g)
+--         -> result)
+--   -> result
+-- withFieldsContainer viaContaining (Container c) cont =
+--   viaContaining c $
+--     \list un ->
+--        withNP @Observe list (Container . un) cont
 
 -- TODO: Make this work for any number of lists of fields, by carefully using
 -- unsafeCoerce to deal with unknown list lengths

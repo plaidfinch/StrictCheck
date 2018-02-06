@@ -111,8 +111,8 @@ instance Consume Integer where
   consume = consumePrimitive
 
 instance (Produce a, Produce b) => Produce (a, b) where
-  produce =
-    (,) <$> field <*> field
+  produce input =
+    (,) <$> recur input <*> recur input
 
 -- instance (Produce a) => Produce [a] where
 --   produce =

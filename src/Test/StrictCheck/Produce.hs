@@ -2,8 +2,11 @@ module Test.StrictCheck.Produce
   ( Produce(..)
   , recur
   , producePrimitive
+  , producing
+  , returning
+  , variadic
   , Lazy(..)
-  , lazy
+  , freely
   , Input
   , Inputs
   ) where
@@ -15,12 +18,14 @@ import           Data.Urn ( Urn, Weight )
 import qualified Data.Urn          as Urn
 import qualified Data.Urn.Internal as Urn ( uninsert )
 
-import Data.Monoid
+import Data.Monoid ((<>))
 
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
 
-import GHC.TypeLits
+import Test.StrictCheck.Curry
+import Test.StrictCheck.Curry.Function
+import Generics.SOP
 
 
 -------------------------------------------------------
@@ -35,15 +40,36 @@ class Produce b where
 -- | Destruct some inputs to generate an output. This function handles the
 -- interleaving of input destruction with output construction. It should always
 -- be immediately called (on the supplied Inputs) at every recursive position
-recur :: Produce a => Inputs -> Gen a
-recur (Inputs is) = do
+producing :: (Inputs -> Gen a) -> Inputs -> Gen a
+producing part (Inputs is) = do
   (vs, is') <- unzip <$> mapM draws is
-  vary (mconcat vs) $ produce (Inputs is')
+  vary (mconcat vs) $ part (Inputs is')
+
+-- TODO: This does not let the value of one input determine the strictness of
+-- another We need to shuffle the inputs randomly and apply the variant of each
+-- to the drawing of the next. This should affect draws too.
+
+recur :: Produce a => Inputs -> Gen a
+recur = producing produce
 
 -- | Use the Arbitrary instance for a type to produce it. This should only be
 -- used for "flat" types, i.e. those which contain no interesting substructure.
 producePrimitive :: Arbitrary b => Inputs -> Gen b
 producePrimitive _ = arbitrary
+
+returning :: Consume a => (Inputs -> Gen b) -> Inputs -> Gen (a -> b)
+returning out =
+  \(Inputs inputs) ->
+    promote $ \a ->
+      producing out (Inputs (consume a : inputs))
+
+variadic :: forall args result. (All Consume args, Curry args result, SListI args )
+         => (Inputs -> Gen result) -> Inputs -> Gen (args ⋯-> result)
+variadic out =
+  \(Inputs inputs) ->
+    fmap (curryFunction @args . toFunction) . promote $ \args ->
+      producing out . Inputs . (++ inputs) $
+        hcollapse $ hcliftA (Proxy :: Proxy Consume) (K . consume . unI) args
 
 
 ---------------------------------------
@@ -113,8 +139,8 @@ draws i =
 newtype Lazy a = Lazy { runLazy :: a }
 
 instance Produce a => Arbitrary (Lazy a) where
-  arbitrary = Lazy <$> lazy
+  arbitrary = Lazy <$> freely produce
 
 -- | A universal generator for all that can be produced (including functions).
-lazy :: Produce a => Gen a
-lazy = produce (Inputs [])
+freely :: (Inputs -> Gen a) -> Gen a
+freely p = p (Inputs [])
