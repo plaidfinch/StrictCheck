@@ -32,7 +32,7 @@ fields =
   Input . Urn.fromList .
     zipWith (\v input ->
                (1, (Variant (variant v), input)))
-            [(0 :: Int) ..]
+            [(0 :: Integer) ..]
 
 -- | Use the CoArbitrary instance for a type to consume it. This should only be
 -- used for "flat" types, i.e. those which contain no interesting substructure.

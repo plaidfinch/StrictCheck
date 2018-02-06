@@ -19,6 +19,7 @@ import qualified Data.Urn          as Urn
 import qualified Data.Urn.Internal as Urn ( uninsert )
 
 import Data.Monoid ((<>))
+import Control.Monad
 
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
@@ -41,13 +42,14 @@ class Produce b where
 -- interleaving of input destruction with output construction. It should always
 -- be immediately called (on the supplied Inputs) at every recursive position
 producing :: (Inputs -> Gen a) -> Inputs -> Gen a
-producing part (Inputs is) = do
-  (vs, is') <- unzip <$> mapM draws is
-  vary (mconcat vs) $ part (Inputs is')
-
--- TODO: This does not let the value of one input determine the strictness of
--- another We need to shuffle the inputs randomly and apply the variant of each
--- to the drawing of the next. This should affect draws too.
+producing part (Inputs inputs) = do
+  (variants, inputs') <-
+     foldM accumInput mempty =<< shuffle inputs
+  vary variants $ part (Inputs inputs')
+  where
+    accumInput (vs, is) i = do
+      (v, i') <- vary vs $ draws i
+      return (v <> vs, i' : is)
 
 recur :: Produce a => Inputs -> Gen a
 recur = producing produce
@@ -126,7 +128,7 @@ draws :: Input -> Gen (Variant, Input)
 draws i =
   oneof [ return (mempty, i)
         , do (v, i')   <- draw i
-             (v', i'') <- draws i'
+             (v', i'') <- vary v $ draws i'
              return (v <> v', i'') ]
 
 
