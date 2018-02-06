@@ -2,6 +2,7 @@ module Test.StrictCheck.Curry
   ( Args
   , Result
   , type (-..->)
+  , type (⋯->)
   , Curry(..)
   , uncurryAll
   , curryAll
@@ -25,9 +26,11 @@ type family Args (f :: *) :: [*] where
   Args x           = '[]
 
 -- Given a list of argument types and a "rest" of type return a curried function
-type family (args :: [*]) -..-> (rest :: *) :: * where
-  '[]        -..-> rest = rest
-  (a : args) -..-> rest = a -> args -..-> rest
+type family (args :: [*]) ⋯-> (rest :: *) :: * where
+  '[]        ⋯-> rest = rest
+  (a : args) ⋯-> rest = a -> args ⋯-> rest
+
+type args -..-> rest = args ⋯-> rest
 
 -- Strip all arguments from a function type, yielding its (non-function) result
 type family Result (f :: *) :: * where
@@ -35,11 +38,11 @@ type family Result (f :: *) :: * where
   Result r           = r
 
 curryIdentity :: forall function.
-  function :~: (Args function -..-> Result function)
+  function :~: (Args function ⋯-> Result function)
 curryIdentity = UNSAFE.unsafeCoerce (Refl :: () :~: ())
 
 withCurryIdentity :: forall function r.
-  (function ~ (Args function -..-> Result function) => r) -> r
+  (function ~ (Args function ⋯-> Result function) => r) -> r
 withCurryIdentity r = case curryIdentity @function of Refl -> r
 
 ----------------------------------------
@@ -49,8 +52,8 @@ withCurryIdentity r = case curryIdentity @function of Refl -> r
 -- | The Curry class lets us embed a function in a Function, or extract it
 -- This is yet another "inductive typeclass" definition
 class Curry (args :: [*]) (result :: *) where
-   uncurryFunction :: (args -..-> result) -> Function args result
-   curryFunction   :: Function args result -> (args -..-> result)
+   uncurryFunction :: (args ⋯-> result) -> Function args result
+   curryFunction   :: Function args result -> (args ⋯-> result)
 
 -- | We can always move back and forth between a (Res x) and an x
 instance Curry '[] x where
@@ -79,5 +82,5 @@ uncurryAll =
 curryAll :: forall args result.
          (Curry args result, SListI args)
          => (NP I args -> result)
-         -> (args -..-> result)
+         -> (args ⋯-> result)
 curryAll = curryFunction . toFunction
