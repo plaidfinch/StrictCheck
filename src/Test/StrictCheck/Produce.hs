@@ -37,9 +37,9 @@ import Generics.SOP
 class Produce b where
   produce :: Inputs -> Gen b
 
--- | Destruct some inputs to generate an output. This function handles the
--- interleaving of input destruction with output construction. It should always
--- be immediately called (on the supplied Inputs) at every recursive position
+-- | Given an input-consuming producer, wrap it in an outer layer of input
+-- consumption, so that this consumption can be interleaved when the producer is
+-- called recursively to generate a subfield of a larger produced datatype.
 producing :: (Inputs -> Gen a) -> Inputs -> Gen a
 producing part (Inputs inputs) = do
   (variants, inputs') <- drawInputs =<< shuffle inputs
@@ -52,6 +52,10 @@ producing part (Inputs inputs) = do
       (vs, is') <- vary v $ drawInputs is
       return (v <> vs, i' : is')
 
+-- | Destruct some inputs to generate an output. This function handles the
+-- interleaving of input destruction with output construction. When producing a
+-- data type, it should be called to produce each subfield -- *not* produce
+-- itself.
 recur :: Produce a => Inputs -> Gen a
 recur = producing produce
 
@@ -65,9 +69,6 @@ producePrimitive _ = arbitrary
 -- How to make random lazy functions --
 ---------------------------------------
 
--- NOTE: You may be tempted to call produce instead of recur here, but this will
--- mean that all of your functions will be 1st-output-lazy. Thus, we use recur.
-
 -- NOTE: This instance must be defined in this module, as it has to break the
 -- abstraction of the Inputs type. No other instance needs to break this.
 -- Incidentally, it also must break Gen's abstraction barrier, because it needs
@@ -76,12 +77,17 @@ producePrimitive _ = arbitrary
 instance (Consume a, Produce b) => Produce (a -> b) where
   produce = returning produce
 
+-- | Create an input-consuming producer of input-consuming functions, given an
+-- input-consuming producer for results of that function.
 returning :: Consume a => (Inputs -> Gen b) -> Inputs -> Gen (a -> b)
 returning out =
   \(Inputs inputs) ->
     promote $ \a ->
       producing out (Inputs (consume a : inputs))
 
+-- | Create an input-consuming producer of input-consuming functions, of any
+-- arity. This will usually be used in conjuntion with type application, to
+-- specify the type(s) of the argument(s) to the function.
 variadic ::
   forall args result. (All Consume args, Curry args result, SListI args)
          => (Inputs -> Gen result) -> Inputs -> Gen (args ⋯-> result)
@@ -146,6 +152,7 @@ newtype Lazy a = Lazy { runLazy :: a }
 instance Produce a => Arbitrary (Lazy a) where
   arbitrary = Lazy <$> freely produce
 
--- | A universal generator for all that can be produced (including functions).
+-- | Actually produce an output, given an input-consuming producer. If a
+-- function is to be produced, it will be almost-certainly non-strict.
 freely :: (Inputs -> Gen a) -> Gen a
 freely p = p (Inputs [])
