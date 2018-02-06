@@ -333,12 +333,6 @@ type GObserve a =
   , SListI (Code a)
   , All SListI (Code a) )
 
--- gMapD :: GObserve a
---       => (forall x. Observe x => f x -> g x)
---       -> Demand a f -> Demand a g
--- gMapD t (GD sop) =
---   GD $ unSOP $ hcliftA (Proxy :: Proxy Observe) t (SOP sop)
-
 gProjectD :: GObserve a
           => (forall x. Observe x => x -> f x)
           -> a -> Demand a f
@@ -401,47 +395,11 @@ gMatchD (GD df) (GD dg) cont =
     flatGD (Flattened un fields) =
       Flattened (GD . coerce . un) fields
 
-
+-- TODO: Is there a canonical version of this?
 newtype Flip f a b = Flip (f b a)
 
 unFlip :: Flip f a b -> f b a
 unFlip (Flip fba) = fba
-
--- gWithFieldsD :: forall a f result. GObserve a
---   => Demand a f
---   -> (forall xs. All Observe xs
---         => NP f xs
---         -> (forall g. NP g xs -> Demand a g)
---         -> result)
---   -> result
--- gWithFieldsD (GD d) cont =
---   go d (\fields un -> cont fields (GD . un))
---   where
---     go :: forall xss r.
---       (All SListI xss, All2 Observe xss)
---        => NS (NP f) xss
---        -> (forall xs. All Observe xs =>
---              (NP f xs -> (forall g. NP g xs -> NS (NP g) xss) -> r))
---        -> r
---     go (Z fields) k = k fields Z
---     go (S more)   k =
---       go more $ \fields un ->
---         k fields (S . un)
-
--- gMatchD :: forall a f g h. GObserve a
---         => (forall x. f x -> g x -> h x)
---         -> Demand a f -> Demand a g
---         -> Maybe (Demand a h)
--- gMatchD combine (GD df) (GD dg) =
---   GD <$> go df dg
---   where
---     go :: forall xss. All SListI xss
---        => NS (NP f) xss
---        -> NS (NP g) xss
---        -> Maybe (NS (NP h) xss)
---     go (Z fs)  (Z gs)  = Just (Z (hliftA2 combine fs gs))
---     go (S fss) (S gss) = S <$> go fss gss
---     go _       _       = Nothing
 
 gPrettyD :: forall a x. (HasDatatypeInfo a, GObserve a)
          => Demand a (K x) -> PrettyD x

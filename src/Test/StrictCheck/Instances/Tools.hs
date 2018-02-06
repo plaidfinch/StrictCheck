@@ -4,7 +4,6 @@ import Test.StrictCheck.Observe
 import Generics.SOP
 import GHC.Generics as GHC
 import Control.DeepSeq
-import Data.Coerce
 
 -- | Convenience type for representing demands upon abstract structures with one
 -- type recursively-demanded type parameter (i.e. (Map k) or Seq)
@@ -25,18 +24,7 @@ embedContainer :: (Functor c, Observe a)
 projectContainer p            x  = Container (fmap p x)
 embedContainer   e (Container x) =            fmap e x
 
-matchContainer ::
-  ((forall x. f x -> g x -> h x)
-   -> c (f a)
-   -> c (g a)
-   -> Maybe (c (h a)))
-  -> (forall x. f x -> g x -> h x)
-  -> Containing c a f
-  -> Containing c a g
-  -> Maybe (Containing c a h)
-matchContainer onContainer combine (Container cf) (Container cg) =
-  fmap Container $ onContainer combine cf cg
-
+-- TODO: helper functions for matching and prettying containers
 
 -- | Convenience type for representing demands upon primitive types (i.e. Int)
 
