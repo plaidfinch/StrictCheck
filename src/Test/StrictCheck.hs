@@ -24,4 +24,22 @@ import Test.StrictCheck.Demands
 import Generics.SOP
 import Generics.SOP.NP
 
+import Test.QuickCheck
+import Data.List
+
 -- TODO: Think hard about what particular things to export from Generics.SOP
+-- and, indeed, our own modules.
+
+-- TODO: Get rid of these functions once we hit production...
+
+grid :: Integer -> Integer -> [[(Integer, Integer)]]
+grid x y = map (\f -> map f [0..y]) $ map (,) [0..x]
+
+withGrid :: Integer -> Integer -> IO (Integer -> Integer -> Integer)
+withGrid x y = do
+  f <- generate (freely produce)
+  let results = map (map (uncurry f)) (grid x y)
+  mapM_ print results
+  putStrLn ""
+  mapM_ print (transpose results)
+  return f
