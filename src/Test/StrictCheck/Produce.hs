@@ -14,11 +14,12 @@ module Test.StrictCheck.Produce
 import Test.QuickCheck
 import Test.QuickCheck.Gen.Unsafe
 
-import           Data.Urn ( Urn, Weight )
+import           Data.Urn ( Urn )
 import qualified Data.Urn          as Urn
 import qualified Data.Urn.Internal as Urn ( uninsert )
 
 import Data.Monoid ((<>))
+import Control.Monad
 
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
@@ -41,16 +42,9 @@ class Produce b where
 -- consumption, so that this consumption can be interleaved when the producer is
 -- called recursively to generate a subfield of a larger produced datatype.
 producing :: (Inputs -> Gen a) -> Inputs -> Gen a
-producing part (Inputs inputs) = do
-  (variants, inputs') <- drawInputs =<< shuffle inputs
-  vary variants $ part (Inputs inputs')
-  where
-    drawInputs :: [Input] -> Gen (Variant, [Input])
-    drawInputs      []  = return mempty
-    drawInputs (i : is) = do
-      (v,  i')  <- draws i
-      (vs, is') <- vary v $ drawInputs is
-      return (v <> vs, i' : is')
+producing part (Inputs is) = do
+  (v, is') <- draws is
+  vary v $ part (Inputs is')
 
 -- | Destruct some inputs to generate an output. This function handles the
 -- interleaving of input destruction with output construction. When producing a
@@ -105,37 +99,33 @@ variadic out =
 -- | Pattern-match on a randomly chosen single constructor of the input, and
 -- produce the corresponding Variant, whose value depends on which constructor
 -- was matched.
-draw :: Input -> Gen (Variant, Input)
+draw :: Input -> Gen (Variant, [Input])
 draw (Input i) =
   case i of
-    Nothing  -> return $ (mempty, Input i)
+    Nothing  -> return mempty
     Just urn -> do
       (_, (v, Input inner), outer) <- Urn.remove urn
-      return $ (v, Input $ merge inner outer)
+      let (variants, inputs) = unzip $ maybe [] contents inner
+      return $ (v <> mconcat variants, Input outer : inputs)
   where
-    merge :: Maybe (Urn a) -> Maybe (Urn a) -> Maybe (Urn a)
-    merge left right =
-      case (left, right) of
-        (Nothing, Nothing) -> Nothing
-        (Nothing, Just r)  -> Just r
-        (Just l, Nothing)  -> Just l
-        (Just l, Just r)   -> Just $ Urn.addToUrn l (contents r)
-
-    contents :: Urn a -> [(Weight, a)]
+    contents :: Urn a -> [a]
     contents urn =
       case Urn.uninsert urn of
-        (weight, a, _, Just urn') -> (weight, a) : contents urn'
-        (weight, a, _, Nothing)   -> [(weight, a)]
+        (_, a, _, Just urn') -> a : contents urn'
+        (_, a, _, Nothing)   -> [a]
 
 -- | Destruct some randomly chosen subparts of the input, and return a composite
 -- Variant whose entropy is derived from all the inputs destructed. The
 -- probability of n pieces of input being consumed decreases as n increases.
-draws :: Input -> Gen (Variant, Input)
-draws i =
-  oneof [ return (mempty, i)
-        , do (v, i')   <- draw i
-             (v', i'') <- vary v $ draws i'
-             return (v <> v', i'') ]
+draws :: [Input] -> Gen (Variant, [Input])
+draws inputs =
+  fmap mconcat . forM inputs $ \input -> do
+    frequency [ (1,) $ return (mempty, [input])
+              , (1,) $ do
+                  (v,  is)  <- draw input
+                  (v', is') <- vary v $ draws is
+                  return (v <> v', is')
+              ]
 
 -- TODO: Allow the user to tune how biased towards strictness things are?
 -- What should the default be?
