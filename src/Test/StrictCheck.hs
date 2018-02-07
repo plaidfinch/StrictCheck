@@ -39,6 +39,7 @@ withGrid :: Integer -> Integer -> IO (Integer -> Integer -> Integer)
 withGrid x y = do
   f <- generate (freely produce)
   let results = map (map (uncurry f)) (grid x y)
+  putStrLn ""
   mapM_ print results
   putStrLn ""
   mapM_ print (transpose results)

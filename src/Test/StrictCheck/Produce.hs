@@ -105,8 +105,8 @@ draw (Input i) =
     Nothing  -> return mempty
     Just urn -> do
       (_, (v, Input inner), outer) <- Urn.remove urn
-      let (variants, inputs) = unzip $ maybe [] contents inner
-      return $ (v <> mconcat variants, Input outer : inputs)
+      let (vs, is) = unzip $ maybe [] contents inner
+      return $ (v <> mconcat vs, Input outer : is)
   where
     contents :: Urn a -> [a]
     contents urn =
