@@ -29,7 +29,8 @@ library
                        monad-loops >= 0.4.3,
                        containers >= 0.5.10,
                        generics-sop >= 0.3.2.0,
-                       constraints >= 0.10
+                       constraints >= 0.10,
+                       bifunctors >= 5.5
   exposed-modules:     Test.StrictCheck
                        Test.StrictCheck.Curry,
                        Test.StrictCheck.Curry.Function

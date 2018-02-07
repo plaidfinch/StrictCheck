@@ -17,6 +17,7 @@ import Generics.SOP.NS
 import Generics.SOP.Constraint
 import Control.DeepSeq
 import Data.Bifunctor
+import Data.Bifunctor.Flip
 import Control.Monad.Identity
 import Data.Fix
 import Type.Reflection
@@ -394,9 +395,6 @@ gMatchD (GD df) (GD dg) cont =
       Flattened (Flip SOP (Code t)) h xs -> Flattened (GDemand t) h xs
     flatGD (Flattened un fields) =
       Flattened (GD . coerce . un) fields
-
--- TODO: Is there a canonical version of this?
-newtype Flip f a b = Flip (f b a)
 
 unFlip :: Flip f a b -> f b a
 unFlip (Flip fba) = fba
