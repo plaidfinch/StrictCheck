@@ -8,7 +8,6 @@ module Test.StrictCheck.Consume
   ) where
 
 import Test.QuickCheck
-import qualified Data.Urn as Urn
 import Generics.SOP
 
 import Test.StrictCheck.Internal.Inputs
@@ -29,23 +28,21 @@ class Consume a where
 -- subpart of the input.
 fields :: [Input] -> Input
 fields =
-  Input . Urn.fromList .
-    zipWith (\v input ->
-               (1, (Variant (variant v), input)))
-            [(0 :: Integer) ..]
+  Input . zipWith (\v input ->
+                     (Variant (variant v), input))
+                  [(0 :: Integer) ..]
 
 -- | Use the CoArbitrary instance for a type to consume it. This should only be
 -- used for "flat" types, i.e. those which contain no interesting substructure.
 consumePrimitive :: CoArbitrary a => a -> Input
 consumePrimitive !a =
-  Input . Just . Urn.singleton 1 $
-    (Variant (coarbitrary a), Input Nothing)
+  Input [(Variant (coarbitrary a), Input [])]
 
 -- | If a type has no observable properties or substructure which can be used
 -- to drive the randomization of output, consumption should merely evaluate a
 -- value to weak-head normal form.
 consumeTrivial :: a -> Input
-consumeTrivial !_ = Input Nothing
+consumeTrivial !_ = Input []
 
 -- | Functions can be trivially consumed.
 instance Consume (a -> b) where

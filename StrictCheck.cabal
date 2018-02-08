@@ -24,7 +24,6 @@ library
                        transformers >= 0.5,
                        QuickCheck,
                        data-fix,
-                       urn-random >= 0.1.0.0,
                        extra >= 1.6,
                        monad-loops >= 0.4.3,
                        containers >= 0.5.10,
@@ -52,7 +51,7 @@ library
                         DeriveAnyClass, TypeOperators, PolyKinds, LambdaCase,
                         TupleSections, TypeFamilyDependencies,
                         MultiParamTypeClasses, DerivingStrategies,
-                        GeneralizedNewtypeDeriving
+                        GeneralizedNewtypeDeriving, ViewPatterns
 -- Do something about type defaults?
   ghc-options:         -Wall -fno-warn-unticked-promoted-constructors
 

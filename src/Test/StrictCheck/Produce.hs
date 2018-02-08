@@ -2,7 +2,7 @@ module Test.StrictCheck.Produce
   ( Produce(..)
   , recur
   , producePrimitive
-  , producing
+  , consuming
   , returning
   , variadic
   , Lazy(..)
@@ -14,19 +14,17 @@ module Test.StrictCheck.Produce
 import Test.QuickCheck
 import Test.QuickCheck.Gen.Unsafe
 
-import           Data.Urn ( Urn )
-import qualified Data.Urn          as Urn
-import qualified Data.Urn.Internal as Urn ( uninsert )
-
 import Data.Monoid ((<>))
-import Control.Monad
-
+import Data.Bifunctor
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
 
 import Test.StrictCheck.Curry
 import Test.StrictCheck.Curry.Function
 import Generics.SOP
+
+import           Data.List.NonEmpty  ( NonEmpty(..) )
+import qualified Data.List.NonEmpty as NE
 
 
 -------------------------------------------------------
@@ -41,17 +39,17 @@ class Produce b where
 -- | Given an input-consuming producer, wrap it in an outer layer of input
 -- consumption, so that this consumption can be interleaved when the producer is
 -- called recursively to generate a subfield of a larger produced datatype.
-producing :: (Inputs -> Gen a) -> Inputs -> Gen a
-producing part (Inputs is) = do
+consuming :: (Inputs -> Gen a) -> Inputs -> Gen a
+build `consuming` (Inputs is) = do
   (v, is') <- draws is
-  vary v $ part (Inputs is')
+  vary v $ build (Inputs is')
 
 -- | Destruct some inputs to generate an output. This function handles the
 -- interleaving of input destruction with output construction. When producing a
 -- data type, it should be called to produce each subfield -- *not* produce
 -- itself.
 recur :: Produce a => Inputs -> Gen a
-recur = producing produce
+recur inputs = consuming produce inputs
 
 -- | Use the Arbitrary instance for a type to produce it. This should only be
 -- used for "flat" types, i.e. those which contain no interesting substructure.
@@ -77,7 +75,7 @@ returning :: Consume a => (Inputs -> Gen b) -> Inputs -> Gen (a -> b)
 returning out =
   \(Inputs inputs) ->
     promote $ \a ->
-      producing out (Inputs (consume a : inputs))
+      consuming out (Inputs (consume a : inputs))
 
 -- | Create an input-consuming producer of input-consuming functions, of any
 -- arity. This will usually be used in conjuntion with type application, to
@@ -88,7 +86,7 @@ variadic ::
 variadic out =
   \(Inputs inputs) ->
     fmap (curryFunction @args . toFunction) . promote $ \args ->
-      producing out . Inputs . (++ inputs) $
+      consuming out . Inputs . (++ inputs) $
         hcollapse $ hcliftA (Proxy :: Proxy Consume) (K . consume . unI) args
 
 
@@ -96,39 +94,37 @@ variadic out =
 -- Random destruction of the original input, as transformed into Input --
 -------------------------------------------------------------------------
 
--- | Pattern-match on a randomly chosen single constructor of the input, and
--- produce the corresponding Variant, whose value depends on which constructor
--- was matched.
-draw :: Input -> Gen (Variant, [Input])
-draw (Input i) =
-  case i of
-    Nothing  -> return mempty
-    Just urn -> do
-      (_, (v, Input inner), outer) <- Urn.remove urn
-      let (vs, is) = unzip $ maybe [] contents inner
-      return $ (v <> mconcat vs, Input outer : is)
+geometric :: (Enum a, Num a) => Gen a
+geometric = oneof [return 0, succ <$> geometric]
+
+pick :: NonEmpty a -> Gen (a, [a])
+pick as = do
+  index <- choose (0, NE.length as - 1)
+  return $ pickAt index as
   where
-    contents :: Urn a -> [a]
-    contents urn =
-      case Urn.uninsert urn of
-        (_, a, _, Just urn') -> a : contents urn'
-        (_, a, _, Nothing)   -> [a]
+    pickAt 0 (x :| xs) = (x, xs)
+    pickAt n (x :| xs) = (x :) <$> pickAt (n - 1) (NE.fromList xs)
 
--- | Destruct some randomly chosen subparts of the input, and return a composite
--- Variant whose entropy is derived from all the inputs destructed. The
--- probability of n pieces of input being consumed decreases as n increases.
 draws :: [Input] -> Gen (Variant, [Input])
-draws inputs =
-  fmap mconcat . forM inputs $ \input -> do
-    frequency [ (1,) $ return (mempty, [input])
-              , (1,) $ do
-                  (v,  is)  <- draw input
-                  (v', is') <- vary v $ draws is
-                  return (v <> v', is')
-              ]
+draws inputs = do
+  fmap (second concat) <$> downward [inputs] =<< geometric
+  where
+    downward :: [[Input]] -> Int -> Gen (Variant, [[Input]])
+    downward levels      0 = return (mempty, levels)
+    downward levels budget =
+      case levels of
+        [          ] -> return (mempty, [])
+        [  ] : above -> downward above budget  -- backtrack
+        here : above ->
+          do (v, below, here') <- draw1 (NE.fromList here)
+             (v', levels') <- vary v $ downward (below:here':above) (budget-1)
+             return (v <> v', levels')
 
--- TODO: Allow the user to tune how biased towards strictness things are?
--- What should the default be?
+    draw1 :: NonEmpty Input -> Gen (Variant, [Input], [Input])
+    draw1 is = do
+      (i, rest) <- pick is
+      let (v, inside) = draw i
+      return (v, inside, rest)
 
 
 ---------------------------------------------

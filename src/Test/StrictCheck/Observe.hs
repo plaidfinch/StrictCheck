@@ -243,8 +243,8 @@ observe :: (All Observe (Args function), Observe (Result function), _)
         => (Result function -> ())
         -> function
         -> Args function
-        -..-> ( Field Thunk (Result function)
-              , NP (Field Thunk) (Args function) )
+        ⋯-> ( Field Thunk (Result function)
+             , NP (Field Thunk) (Args function) )
 observe context function =
   curryAll (observeNP context (uncurryAll function))
 
@@ -276,7 +276,7 @@ showPrettyFieldThunkS _            thunk _    (PF T)      = (thunk ++)
 showPrettyFieldThunkS qualifyNames thunk prec (PF (E pd)) =
   case pd of
     ConstructorD name fields ->
-      showParen (prec > 10) $
+      showParen (prec > 10 && length fields > 0) $
         showString (qualify name)
         . flip foldMapCompose fields
           (((' ' :) .) . showPrettyFieldThunkS qualifyNames thunk 11)

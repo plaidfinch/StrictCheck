@@ -1,7 +1,6 @@
 module Test.StrictCheck.Internal.Inputs where
 
 import Test.QuickCheck
-import Data.Urn
 
 --------------------------------------------------
 -- The core user-facing types: Input and Inputs --
@@ -20,9 +19,12 @@ instance Monoid Variant where
 -- Unfolding the contained urns forces a particular random control path
 -- for destructing the datatype.
 newtype Input =
-  Input (Maybe (Urn (Variant, Input)))
+  Input [(Variant, Input)]
 
 -- | A list of inputs given to a function, in abstract form. This lazy structure
 -- is evaluated piecewise during the course of producing a function, thus
 -- triggering the partial evaluation of the original input to the function.
 newtype Inputs = Inputs [Input]
+
+draw :: Input -> (Variant, [Input])
+draw (Input (unzip -> (mconcat -> v, is))) = (v, is)
