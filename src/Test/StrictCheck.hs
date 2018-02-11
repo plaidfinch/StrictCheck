@@ -34,6 +34,9 @@ import Data.List
 
 -- TODO: Get rid of these functions once we hit production...
 
+import Test.StrictCheck.Internal.Inputs
+import Control.DeepSeq
+
 grid :: Integer -> Integer -> [[(Integer, Integer)]]
 grid x y = map (\f -> map f [0..y]) $ map (,) [0..x]
 
@@ -56,9 +59,18 @@ binary :: Int -> Binary
 binary 0 = L
 binary n = N (binary (n - 1)) (binary (n - 1))
 
-data Omega = Succ Omega | Zero
+data Omega = Succ Omega -- | Zero
   deriving stock (Eq, Ord, Show, GHC.Generic)
-  deriving anyclass (Generic, HasDatatypeInfo, Consume, Observe)
+  deriving anyclass (Generic, HasDatatypeInfo, Consume, Observe, NFData)
+
+data D = C ()
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (Generic, HasDatatypeInfo, Consume, NFData)
+
+instance Observe D where
+  -- type Demand D = GDemand D
+  -- projectD f (C u w) = (GD (Z (f u :* f w :* Nil)))
+  -- embedD e (GD (Z (x :* Nil))) = C (e x)
 
 instance Produce Omega where
   produce input = Succ <$> recur input
@@ -71,8 +83,13 @@ treeToOmega = generate (freely produce)
 
 forceOmegaN :: Int -> Omega -> ()
 forceOmegaN 0 _        = ()
-forceOmegaN _    Zero  = ()
 forceOmegaN n (Succ o) = forceOmegaN (n - 1) o
+
+forceBinaryN :: Int -> Binary -> ()
+forceBinaryN _ L = ()
+forceBinaryN 0 _ = ()
+forceBinaryN n (N l r) =
+  forceBinaryN (pred n) l `seq` forceBinaryN (pred n) r
 
 observeTreeToOmega :: (Binary -> Omega) -> Int -> Int -> Field Thunk Binary
 observeTreeToOmega f m n = snd $ observe1 (forceOmegaN n) f (binary m)
