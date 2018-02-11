@@ -104,6 +104,9 @@ instance Observe Integer where
 --   projectD p = projectContaining p . Set.toList
 --   embedD   e = Set.fromList . embedContaining e
 
+instance Produce () where
+  produce = producePrimitive
+
 instance Produce Integer where
   produce = producePrimitive
 

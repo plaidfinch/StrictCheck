@@ -107,7 +107,7 @@ pick as = do
 
 draws :: [Input] -> Gen (Variant, [Input])
 draws inputs = do
-  fmap (second concat) <$> downward [inputs] =<< geometric
+  second concat <$> (downward [inputs] =<< geometric)
   where
     downward :: [[Input]] -> Int -> Gen (Variant, [[Input]])
     downward levels      0 = return (mempty, levels)
