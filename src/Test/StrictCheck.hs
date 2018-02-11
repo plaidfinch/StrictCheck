@@ -21,6 +21,8 @@ import Test.StrictCheck.Consume
 import Test.StrictCheck.Observe
 import Test.StrictCheck.Instances
 import Test.StrictCheck.Demands
+import Test.StrictCheck.Shaped
+import Test.StrictCheck.Shaped.Flattened
 
 import Generics.SOP
 import Generics.SOP.NP
@@ -30,7 +32,7 @@ import Test.QuickCheck
 import Data.List
 
 -- TODO: Think hard about what particular things to export from Generics.SOP
--- and, indeed, our own modules.
+-- and, indeed, our own modules. And which modules to export other modules from
 
 -- TODO: Get rid of these functions once we hit production...
 
@@ -53,7 +55,7 @@ withGrid x y = do
 data Binary =
   N Binary Binary | L
   deriving stock (Eq, Ord, Show, GHC.Generic)
-  deriving anyclass (Generic, HasDatatypeInfo, Consume, Observe)
+  deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped)
 
 binary :: Int -> Binary
 binary 0 = L
@@ -61,16 +63,11 @@ binary n = N (binary (n - 1)) (binary (n - 1))
 
 data Omega = Succ Omega -- | Zero
   deriving stock (Eq, Ord, Show, GHC.Generic)
-  deriving anyclass (Generic, HasDatatypeInfo, Consume, Observe, NFData)
+  deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped, NFData)
 
 data D = C ()
   deriving stock (GHC.Generic, Show)
-  deriving anyclass (Generic, HasDatatypeInfo, Consume, NFData)
-
-instance Observe D where
-  -- type Demand D = GDemand D
-  -- projectD f (C u w) = (GD (Z (f u :* f w :* Nil)))
-  -- embedD e (GD (Z (x :* Nil))) = C (e x)
+  deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped, NFData)
 
 instance Produce Omega where
   produce input = Succ <$> recur input
@@ -91,5 +88,5 @@ forceBinaryN 0 _ = ()
 forceBinaryN n (N l r) =
   forceBinaryN (pred n) l `seq` forceBinaryN (pred n) r
 
-observeTreeToOmega :: (Binary -> Omega) -> Int -> Int -> Field Thunk Binary
+observeTreeToOmega :: (Binary -> Omega) -> Int -> Int -> Demand Binary
 observeTreeToOmega f m n = snd $ observe1 (forceOmegaN n) f (binary m)

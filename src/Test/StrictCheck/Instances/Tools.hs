@@ -1,9 +1,12 @@
 module Test.StrictCheck.Instances.Tools where
 
-import Test.StrictCheck.Observe
+import Control.DeepSeq
+
 import Generics.SOP
 import GHC.Generics as GHC
-import Control.DeepSeq
+
+import Test.StrictCheck.Shaped
+import Test.StrictCheck.Shaped.Flattened
 
 -- | Convenience type for representing demands upon abstract structures with one
 -- type recursively-demanded type parameter (i.e. (Map k) or Seq)
@@ -13,12 +16,12 @@ newtype Containing h a f =
   deriving (Eq, Ord, Show, GHC.Generic)
   deriving newtype NFData
 
-projectContainer :: (Functor c, Observe a)
-  => (forall x. Observe x => x -> f x)
+projectContainer :: (Functor c, Shaped a)
+  => (forall x. Shaped x => x -> f x)
   -> c a -> Containing c a f
 
-embedContainer :: (Functor c, Observe a)
-  => (forall x. Observe x => f x -> x)
+embedContainer :: (Functor c, Shaped a)
+  => (forall x. Shaped x => f x -> x)
   -> Containing c a f -> c a
 
 projectContainer p            x  = Container (fmap p x)
@@ -35,14 +38,14 @@ newtype Prim (x :: *) (f :: * -> *) = Prim x
 unPrim :: Prim x f -> x
 unPrim (Prim x) = x
 
-projectPrim :: (forall x. Observe x => x -> f x) -> a -> Prim a f
+projectPrim :: (forall x. Shaped x => x -> f x) -> a -> Prim a f
 projectPrim _ = Prim
 
-embedPrim :: (forall x. Observe x => f x -> x) -> Prim a f -> a
+embedPrim :: (forall x. Shaped x => f x -> x) -> Prim a f -> a
 embedPrim _ = unPrim
 
 matchPrim :: Eq a => Prim a f -> Prim a g
-           -> (forall xs. All Observe xs
+           -> (forall xs. All Shaped xs
                 => Flattened (Prim a) f xs
                 -> Maybe (Flattened (Prim a) g xs)
                 -> result)
@@ -53,10 +56,10 @@ matchPrim (Prim a) (Prim b) k =
   where
     flatPrim x = Flattened (const (Prim x)) Nil
 
-prettyPrim :: Show a => Prim a (K x) -> PrettyD x
+prettyPrim :: Show a => Prim a (K x) -> RenderLevel x
 prettyPrim (Prim a) = prettyConstant (show a)
 
-prettyConstant :: String -> PrettyD x
+prettyConstant :: String -> RenderLevel x
 prettyConstant s = CustomD 11 [Left (Left s)]
 
 
@@ -66,13 +69,13 @@ prettyConstant s = CustomD 11 [Left (Left s)]
 --   forall c a f result.
 --      (forall r h.
 --         c (h a) ->
---         (forall x. Observe x
+--         (forall x. Shaped x
 --            => [h x]
 --            -> (forall g. [g x] -> c (g a))
 --            -> r)
 --         -> r)
 --   -> Containing c a f
---   -> (forall xs. All Observe xs
+--   -> (forall xs. All Shaped xs
 --         => NP f xs
 --         -> (forall g. NP g xs -> Containing c a g)
 --         -> result)
@@ -80,7 +83,7 @@ prettyConstant s = CustomD 11 [Left (Left s)]
 -- withFieldsContainer viaContaining (Container c) cont =
 --   viaContaining c $
 --     \list un ->
---        withNP @Observe list (Container . un) cont
+--        withNP @Shaped list (Container . un) cont
 
 -- TODO: Make this work for any number of lists of fields, by carefully using
 -- unsafeCoerce to deal with unknown list lengths
@@ -88,13 +91,13 @@ withFieldsViaList ::
   forall demand f result.
      (forall r h.
         demand h ->
-        (forall x. Observe x
+        (forall x. Shaped x
            => [h x]
            -> (forall g. [g x] -> demand g)
            -> r)
         -> r)
   -> demand f
-  -> (forall xs. All Observe xs
+  -> (forall xs. All Shaped xs
         => NP f xs
         -> (forall g. NP g xs -> demand g)
         -> result)
@@ -102,7 +105,7 @@ withFieldsViaList ::
 withFieldsViaList viaList demand cont =
   viaList demand $
     \list un ->
-       withNP @Observe list un cont
+       withNP @Shaped list un cont
 
 withNP :: forall c demand result f x. c x
        => [f x]

@@ -36,6 +36,8 @@ library
                        Test.StrictCheck.Consume,
                        Test.StrictCheck.Produce,
                        Test.StrictCheck.Observe,
+                       Test.StrictCheck.Shaped,
+                       Test.StrictCheck.Shaped.Flattened,
                        Test.StrictCheck.Internal.Inputs,
                        Test.StrictCheck.Instances,
                        Test.StrictCheck.Instances.Tools,

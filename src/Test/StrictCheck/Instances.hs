@@ -4,7 +4,7 @@ module Test.StrictCheck.Instances where
 
 import Test.StrictCheck.Consume
 import Test.StrictCheck.Produce
-import Test.StrictCheck.Observe
+import Test.StrictCheck.Shaped
 import Test.StrictCheck.Instances.Tools
 import Test.QuickCheck
 
@@ -36,22 +36,22 @@ instance (Consume v) => Consume (Seq v) where
 instance (Consume v) => Consume (Set v) where
   consume = fields . map consume . Set.toList
 
-instance Observe ()
-instance (Observe a, Observe b) => Observe (a, b)
-instance Observe a => Observe [a]
-instance Observe a => Observe (Maybe a)
-instance (Observe a, Observe b) => Observe (Either a b)
+instance Shaped ()
+instance (Shaped a, Shaped b) => Shaped (a, b)
+instance Shaped a => Shaped [a]
+instance Shaped a => Shaped (Maybe a)
+instance (Shaped a, Shaped b) => Shaped (Either a b)
 
 -- -- TODO: Custom prettyD for tuples
 
-instance Observe Integer where
-  type Demand Integer = Prim Integer
-  projectD    = projectPrim
-  embedD      = embedPrim
-  matchD      = matchPrim
-  prettyD     = prettyPrim
+instance Shaped Integer where
+  type Shape Integer = Prim Integer
+  project    = projectPrim
+  embed      = embedPrim
+  match      = matchPrim
+  render     = prettyPrim
 
--- instance (Typeable a, Typeable b) => Observe (a -> b) where
+-- instance (Typeable a, Typeable b) => Shaped (a -> b) where
 --   type Demand (a -> b) = Opaque (a -> b)
 --   projectD    = projectOpaque
 --   embedD      = embedOpaque
@@ -59,7 +59,7 @@ instance Observe Integer where
 --   matchD      = matchOpaque
 --   prettyD _   = prettyConstant "<function>"
 
--- instance (Observe v, Typeable k, Ord k, Show k) => Observe (Map k v) where
+-- instance (Shaped v, Typeable k, Ord k, Show k) => Shaped (Map k v) where
 --   type Demand (Map k v) = Map k `Containing` v
 --   projectD = projectContainer
 --   embedD   = embedContainer
@@ -94,12 +94,12 @@ instance Observe Integer where
 --         , Left (Left ")")
 --         ]
 
--- instance Observe a => Observe (Seq a) where
+-- instance Shaped a => Shaped (Seq a) where
 --   type Demand (Seq a) = Seq `Containing` a
 --   projectD = projectContaining
 --   embedD   = embedContaining
 
--- instance (Ord a, Observe a) => Observe (Set a) where
+-- instance (Ord a, Shaped a) => Shaped (Set a) where
 --   type Demand (Set a) = [] `Containing` a
 --   projectD p = projectContaining p . Set.toList
 --   embedD   e = Set.fromList . embedContaining e

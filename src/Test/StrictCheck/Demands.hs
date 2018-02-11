@@ -1,24 +1,26 @@
 module Test.StrictCheck.Demands where
 
-import Test.StrictCheck.Observe
-import Generics.SOP
+import Generics.SOP hiding ( Shape )
 import Type.Reflection
 
+import Test.StrictCheck.Observe
+import Test.StrictCheck.Shaped
+
 whnf, nf, spineStrict
-  :: forall a. Observe a => a -> Field Thunk a
+  :: forall a. Shaped a => a -> Demand a
 
-whnf = F . E . projectD (const (F T))
+whnf = Wrap . E . project (const (Wrap T))
 
-nf = projectField E
+nf = interleave E
 
 spineStrict =
-  unfoldD strictIfSame . I
+  extrafold strictIfSame . I
   where
-    strictIfSame :: forall x. Observe x => I x -> Thunk (Demand x I)
+    strictIfSame :: forall x. Shaped x => I x -> Thunk (Shape x I)
     strictIfSame (I x) =
       case eqTypeRep (typeOf x) (typeRep @a) of
         Nothing    -> T
-        Just HRefl -> E (projectD @a I x)
+        Just HRefl -> E (project @a I x)
 
 data Striated a t where
   Same :: a -> Striated a a
