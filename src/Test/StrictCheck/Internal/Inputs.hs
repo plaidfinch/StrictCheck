@@ -1,4 +1,9 @@
-module Test.StrictCheck.Internal.Inputs where
+module Test.StrictCheck.Internal.Inputs
+  ( Variant(..)
+  , Input(..)
+  , Inputs(..)
+  , draw
+  ) where
 
 import Test.QuickCheck
 
@@ -18,8 +23,8 @@ instance Monoid Variant where
 -- | A tree representing all possible destruction sequences for a value
 -- Unfolding the contained urns forces a particular random control path
 -- for destructing the datatype.
-newtype Input =
-  Input [(Variant, Input)]
+data Input =
+  Input Variant [Input]
 
 -- | A list of inputs given to a function, in abstract form. This lazy structure
 -- is evaluated piecewise during the course of producing a function, thus
@@ -27,4 +32,4 @@ newtype Input =
 newtype Inputs = Inputs [Input]
 
 draw :: Input -> (Variant, [Input])
-draw (Input (unzip -> (mconcat -> v, is))) = (v, is)
+draw (Input v is) = (v, is)

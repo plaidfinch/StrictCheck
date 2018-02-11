@@ -2,6 +2,7 @@ module Test.StrictCheck.Consume
   ( Input
   , Inputs
   , Consume(..)
+  , constructor
   , fields
   , consumeTrivial
   , consumePrimitive
@@ -9,6 +10,7 @@ module Test.StrictCheck.Consume
 
 import Test.QuickCheck
 import Generics.SOP
+import Generics.SOP.NS
 
 import Test.StrictCheck.Internal.Inputs
 
@@ -23,26 +25,26 @@ class Consume a where
   default consume :: GConsume a => a -> Input
   consume = gConsume
 
--- | Reassemble pieces of input into a larger Input. The Words are weights which
--- determine the relative probability of continuing to pattern match in that
--- subpart of the input.
+-- | Reassemble pieces of input into a larger Input.
+constructor :: Int -> [Input] -> Input
+constructor n !is =
+  Input (Variant (variant n)) is
+
 fields :: [Input] -> Input
-fields =
-  Input . zipWith (\v input ->
-                     (Variant (variant v), input))
-                  [(0 :: Integer) ..]
+fields = constructor 0
 
 -- | Use the CoArbitrary instance for a type to consume it. This should only be
 -- used for "flat" types, i.e. those which contain no interesting substructure.
 consumePrimitive :: CoArbitrary a => a -> Input
 consumePrimitive !a =
-  Input [(Variant (coarbitrary a), Input [])]
+  Input (Variant (coarbitrary a)) []
 
 -- | If a type has no observable properties or substructure which can be used
 -- to drive the randomization of output, consumption should merely evaluate a
 -- value to weak-head normal form.
 consumeTrivial :: a -> Input
-consumeTrivial !_ = Input []
+consumeTrivial !_ =
+  Input mempty []
 
 -- | Functions can be trivially consumed.
 instance Consume (a -> b) where
@@ -56,8 +58,8 @@ instance Consume (a -> b) where
 type GConsume a = (Generic a, All2 Consume (Code a))
 
 gConsume :: GConsume a => a -> Input
-gConsume =
-  fields
+gConsume !(from -> sop) =
+  constructor (index_SOP sop)
   . hcollapse
   . hcliftA (Proxy :: Proxy Consume) (K . consume . unI)
-  . from
+  $ sop

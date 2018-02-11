@@ -337,13 +337,13 @@ type GObserve a =
 gProjectD :: GObserve a
           => (forall x. Observe x => x -> f x)
           -> a -> Demand a f
-gProjectD p a =
-  GD (unSOP (hcliftA (Proxy :: Proxy Observe) (p . unI) (from a)))
+gProjectD p !(from -> sop) =
+  GD (unSOP (hcliftA (Proxy :: Proxy Observe) (p . unI) sop))
 
 gEmbedD :: GObserve a
         => (forall x. Observe x => f x -> x)
         -> Demand a f -> a
-gEmbedD e (GD d) =
+gEmbedD e !(GD d) =
   to (hcliftA (Proxy :: Proxy Observe) (I . e) (SOP d))
 
 gMatchD :: forall a f g result. GObserve a
