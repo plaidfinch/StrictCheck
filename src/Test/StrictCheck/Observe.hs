@@ -58,8 +58,6 @@ class Typeable a => Observe (a :: *) where
          => (forall x. Observe x => f x -> x) -> Demand a f -> a
   embedD = gEmbedD
 
-  -- TODO: Derive matchD generically
-
   -- NOTE: new behavior should be to succeed whenever the same "constructor" was
   -- used -- either a literal constructor of a figurative one: map with exactly
   -- the same keys, *any* function considered same constructor...
