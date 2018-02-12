@@ -57,6 +57,26 @@ library
 -- Do something about type defaults?
   ghc-options:         -Wall -fno-warn-unticked-promoted-constructors
 
+test-suite test-strictcheck
+  type:                 exitcode-stdio-1.0
+  hs-source-dirs:       tests
+  main-is:              Tests.hs
+  default-language:     Haskell2010
+  default-extensions:   DataKinds, GADTs, BangPatterns, TypeFamilies, RankNTypes,
+                        AllowAmbiguousTypes, UndecidableInstances,
+                        DefaultSignatures, TypeApplications, ScopedTypeVariables,
+                        FlexibleContexts, ConstraintKinds, DeriveFunctor,
+                        FlexibleInstances, StandaloneDeriving, DeriveGeneric,
+                        DeriveAnyClass, TypeOperators, PolyKinds, LambdaCase,
+                        TupleSections, TypeFamilyDependencies,
+                        MultiParamTypeClasses, DerivingStrategies,
+                        GeneralizedNewtypeDeriving, ViewPatterns
+  ghc-options:         -Wall
+  build-depends:        base,
+                        HUnit,
+                        generics-sop >= 0.3.2.0,
+                        StrictCheck
+
 -- executable StrictCheck-exe
 --   hs-source-dirs:      app
 --   main-is:             Main.hs
