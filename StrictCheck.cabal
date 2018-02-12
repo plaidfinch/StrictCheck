@@ -71,10 +71,11 @@ test-suite test-strictcheck
                         TupleSections, TypeFamilyDependencies,
                         MultiParamTypeClasses, DerivingStrategies,
                         GeneralizedNewtypeDeriving, ViewPatterns
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fno-warn-unused-imports
   build-depends:        base,
                         HUnit,
                         generics-sop >= 0.3.2.0,
+                        deepseq,
                         StrictCheck
 
 -- executable StrictCheck-exe
