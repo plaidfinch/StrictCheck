@@ -31,6 +31,13 @@ testList2 = [7,8,9,10,11]
 whnfContext :: a -> ()
 whnfContext = flip seq ()
 
+-- Evaluates the first n cells
+spineStrictUpToContext :: Int -> [a] -> ()
+spineStrictUpToContext n = spineStrictContext . take n
+
+spineStrictContext :: [a] -> ()
+spineStrictContext = flip seq () . foldl' (flip (:)) []
+
 -- reverse should be spine strict on whnf
 testReverse :: Test
 testReverse =
@@ -50,7 +57,9 @@ testAppend =
     spineStrict testList  ~=? dIn1
   , whnf        testList2 ~=? dIn2
   ]
-  where (_ {-dOut-}, dIns) = observeNP whnfContext (uncurryAll (++)) args
+  where (_ {-dOut-}, dIns) = observeNP
+                               (spineStrictUpToContext $ length testList + 1)
+                               (uncurryAll (++)) args
 
         dIn1 = hd dIns
         dIn2 = hd (tl dIns)
@@ -101,6 +110,7 @@ testSuite = TestList [
     TestLabel "Data.List reverse"     testReverse
   , TestLabel "Data.List rotate"      testRotate
   , TestLabel "Data.List foldr (+)"   testFoldrSum
+  , TestLabel "Data.List (++)"        testAppend
   , TestLabel "BinTree   reverseTree" testReverseTree
   ]
 
