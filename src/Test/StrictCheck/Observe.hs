@@ -34,8 +34,8 @@ type Demand = (%) Thunk
 
 -- | Force a value in some applicative context. This is useful for ensuring that
 -- values are evaluated in the correct order inside of unsafePerformIO blocks.
-evaluate :: Applicative f => a -> f ()
-evaluate !_ = pure ()
+eval :: Applicative f => a -> f ()
+eval !_ = pure ()
 
 {-# NOINLINE entangle #-}
 entangle :: forall a. a -> (a, Thunk a)
@@ -48,7 +48,7 @@ entangle a =
            , unsafePerformIO $ readIORef ref )
 
 {-# NOINLINE entangleShape #-}
-entangleShape :: Shaped a => a -> (a, Thunk % a)
+entangleShape :: Shaped a => a -> (a, Demand a)
 entangleShape =
   first (fuse unI)
   . (\(Pair l r) -> (l, r))
@@ -61,9 +61,9 @@ observe1 context function input =
   runIdentity $ do
     let (input',  inputD)  = entangleShape input
         (result', resultD) = entangleShape (function input')
-    !_ <- evaluate (context result')
-    !_ <- evaluate (rnf inputD)
-    !_ <- evaluate (rnf resultD)
+    !_ <- eval (context result')
+    !_ <- eval (rnf inputD)
+    !_ <- eval (rnf resultD)
     return (resultD, inputD)
 
 observeNP :: (All Shaped inputs, Shaped result, _)
@@ -81,9 +81,9 @@ observeNP context function inputs =
           (hliftA (\(Pair r _) -> r) entangled,
            hliftA (\(Pair _ l) -> l) entangled)
         (result', resultD) = entangleShape (function inputs')
-    !_ <- evaluate (context result')
-    !_ <- evaluate (rnf inputsD)
-    !_ <- evaluate (rnf resultD)
+    !_ <- eval (context result')
+    !_ <- eval (rnf inputsD)
+    !_ <- eval (rnf resultD)
     return (resultD, inputsD)
 
 observe :: (All Shaped (Args function), Shaped (Result function), _)
@@ -96,9 +96,9 @@ observe context function =
   curryAll (observeNP context (uncurryAll function))
 
 
----------------
--- Shrinking --
----------------
+-----------------------
+-- Shrinking demands --
+-----------------------
 
 shrinkDemand :: forall a. Shaped a => Demand a -> [Demand a]
 shrinkDemand (Wrap T)     = []
@@ -114,6 +114,24 @@ shrinkDemand (Wrap (E d)) =
       (Wrap T :*) <$> shrinkOne xs
     shrinkOne (f@(Wrap (E _)) :* xs) =
       fmap (:* xs) (shrinkDemand f) ++ fmap (f :* ) (shrinkOne xs)
+
+
+------------------------------------
+-- Evaluating demands as contexts --
+------------------------------------
+
+evaluate :: forall a. Shaped a => Demand a -> a -> ()
+evaluate demand (interleave I -> value) =
+  go @a demand value
+  where
+    go :: forall x. Shaped x => Thunk % x -> I % x -> ()
+    go (Wrap T)     _            = ()
+    go (Wrap (E d)) (Wrap (I v)) =
+      match @x d v $
+        \(Flattened _ fieldsD) -> maybe () $
+        \(Flattened _ fieldsV) ->
+            rnf . hcollapse $
+              hcliftA2 (Proxy :: Proxy Shaped) ((K .) . go) fieldsD fieldsV
 
 
 -----------------------------
