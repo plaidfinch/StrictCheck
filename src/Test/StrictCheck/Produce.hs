@@ -1,8 +1,7 @@
 module Test.StrictCheck.Produce
   ( Produce(..)
   , recur
-  , producePrimitive
-  , consuming
+  , build
   , returning
   , variadic
   , Lazy(..)
@@ -16,9 +15,9 @@ import Test.QuickCheck.Gen.Unsafe
 
 import Data.Monoid ((<>))
 import Data.Bifunctor
+
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
-
 import Test.StrictCheck.Curry
 import Test.StrictCheck.Curry.Function
 import Generics.SOP
@@ -31,30 +30,31 @@ import qualified Data.List.NonEmpty as NE
 -- The user interface for creating Produce instances --
 -------------------------------------------------------
 
+-- TODO: parameterize over destruction pattern?
+-- TODO: use implicit parameter for input! (and destrubtion pattern?)
+
 -- | Produce an arbitrary construction, but using Inputs to drive the
 -- implicit destruction of the original input value.
 class Produce b where
-  produce :: Inputs -> Gen b
+  produce :: (?inputs::Inputs) => Gen b
+
+theInputs :: (?inputs::Inputs) => [Input]
+theInputs = getInputs ?inputs
 
 -- | Given an input-consuming producer, wrap it in an outer layer of input
 -- consumption, so that this consumption can be interleaved when the producer is
 -- called recursively to generate a subfield of a larger produced datatype.
-consuming :: (Inputs -> Gen a) -> Inputs -> Gen a
-build `consuming` (Inputs is) = do
-  (v, is') <- draws is
-  vary v $ build (Inputs is')
+build :: (?inputs::Inputs) => ((?inputs::Inputs) => Gen a) -> Gen a
+build gen = do
+  (v, is') <- draws theInputs
+  vary v $ let ?inputs = Inputs is' in gen
 
 -- | Destruct some inputs to generate an output. This function handles the
 -- interleaving of input destruction with output construction. When producing a
 -- data type, it should be called to produce each subfield -- *not* produce
 -- itself.
-recur :: Produce a => Inputs -> Gen a
-recur inputs = consuming produce inputs
-
--- | Use the Arbitrary instance for a type to produce it. This should only be
--- used for "flat" types, i.e. those which contain no interesting substructure.
-producePrimitive :: Arbitrary b => Inputs -> Gen b
-producePrimitive _ = arbitrary
+recur :: (Produce a, ?inputs::Inputs) => Gen a
+recur = build produce
 
 
 ---------------------------------------
@@ -71,23 +71,24 @@ instance (Consume a, Produce b) => Produce (a -> b) where
 
 -- | Create an input-consuming producer of input-consuming functions, given an
 -- input-consuming producer for results of that function.
-returning :: Consume a => (Inputs -> Gen b) -> Inputs -> Gen (a -> b)
+returning :: (Consume a, ?inputs::Inputs) => ((?inputs::Inputs) => Gen b) -> Gen (a -> b)
 returning out =
-  \(Inputs inputs) ->
-    promote $ \a ->
-      consuming out (Inputs (consume a : inputs))
+  promote $ \a ->
+    let ?inputs = Inputs (consume a : theInputs)
+    in build out
 
 -- | Create an input-consuming producer of input-consuming functions, of any
 -- arity. This will usually be used in conjuntion with type application, to
 -- specify the type(s) of the argument(s) to the function.
 variadic ::
-  forall args result. (All Consume args, Curry args result, SListI args)
-         => (Inputs -> Gen result) -> Inputs -> Gen (args ⋯-> result)
+  forall args result. (All Consume args, Curry args result, SListI args, ?inputs::Inputs)
+         => ((?inputs::Inputs) => Gen result) -> Gen (args ⋯-> result)
 variadic out =
-  \(Inputs inputs) ->
-    fmap (curryFunction @args . toFunction) . promote $ \args ->
-      consuming out . Inputs . (++ inputs) $
-        hcollapse $ hcliftA (Proxy :: Proxy Consume) (K . consume . unI) args
+  fmap (curryFunction @args . toFunction) . promote $ \args ->
+    let ?inputs =
+          Inputs . (++ theInputs) $
+            hcollapse $ hcliftA (Proxy :: Proxy Consume) (K . consume . unI) args
+    in build out
 
 
 -------------------------------------------------------------------------
@@ -140,5 +141,5 @@ instance Produce a => Arbitrary (Lazy a) where
 
 -- | Actually produce an output, given an input-consuming producer. If a
 -- function is to be produced, it will be almost-certainly non-strict.
-freely :: (Inputs -> Gen a) -> Gen a
-freely p = p (Inputs [])
+freely :: ((?inputs::Inputs) => Gen a) -> Gen a
+freely p = let ?inputs = Inputs [] in p

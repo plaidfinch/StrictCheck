@@ -36,6 +36,8 @@ import Data.List
 
 -- TODO: Get rid of these functions once we hit production...
 
+-- TODO: Major documentation triage!
+
 import Test.StrictCheck.Internal.Inputs
 import Control.DeepSeq
 
@@ -70,7 +72,7 @@ data D = C ()
   deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped, NFData)
 
 instance Produce Omega where
-  produce input = Succ <$> recur input
+  produce = Succ <$> recur
 
 omega :: Omega
 omega = Succ omega
@@ -90,3 +92,6 @@ forceBinaryN n (N l r) =
 
 observeTreeToOmega :: (Binary -> Omega) -> Int -> Int -> Demand Binary
 observeTreeToOmega f m n = snd $ observe1 (forceOmegaN n) f (binary m)
+
+-- TODO: "Evaluation" triple: inputs, result demand, input demands
+-- Give it generation, shrinking, ...

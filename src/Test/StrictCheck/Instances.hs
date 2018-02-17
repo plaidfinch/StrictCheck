@@ -28,13 +28,13 @@ instance (Consume a) => Consume [a]
 instance (Consume a) => Consume (Tree a)
 
 instance (Consume v) => Consume (Map k v) where
-  consume = fields . fmap (consume . snd) . Map.toList
+  consume = constructor 0 . fmap (consume . snd) . Map.toList
 
 instance (Consume v) => Consume (Seq v) where
-  consume = fields . map consume . toList
+  consume = constructor 0 . map consume . toList
 
 instance (Consume v) => Consume (Set v) where
-  consume = fields . map consume . Set.toList
+  consume = constructor 0 . map consume . Set.toList
 
 instance Shaped ()
 instance (Shaped a, Shaped b) => Shaped (a, b)
@@ -55,7 +55,7 @@ instance Shaped Integer where
 --   type Demand (a -> b) = Opaque (a -> b)
 --   projectD    = projectOpaque
 --   embedD      = embedOpaque
---   withFieldsD = withFieldsOpaque
+--   withFconstructor 0D = withFconstructor 0Opaque
 --   matchD      = matchOpaque
 --   prettyD _   = prettyConstant "<function>"
 
@@ -63,8 +63,8 @@ instance Shaped Integer where
 --   type Demand (Map k v) = Map k `Containing` v
 --   projectD = projectContainer
 --   embedD   = embedContainer
---   withFieldsD =
---     withFieldsContainer $ \m k ->
+--   withFconstructor 0D =
+--     withFconstructor 0Container $ \m k ->
 --       k (Map.elems m) (Map.fromList . zip (keys m))
 --   matchD =
 --     matchContainer $ \f m n ->
@@ -105,27 +105,27 @@ instance Shaped Integer where
 --   embedD   e = Set.fromList . embedContaining e
 
 instance Produce () where
-  produce = producePrimitive
+  produce = arbitrary
 
 instance Produce Integer where
-  produce = producePrimitive
+  produce = arbitrary
 
 instance Consume Integer where
   consume = consumePrimitive
 
 instance (Produce a, Produce b) => Produce (a, b) where
-  produce input =
-    (,) <$> recur input <*> recur input
+  produce =
+    (,) <$> recur <*> recur
 
 instance (Produce a) => Produce [a] where
-  produce input =
+  produce =
     frequency [ (1, return [])
-              , (1, (:) <$> recur input
-                        <*> recur input)
+              , (1, (:) <$> recur
+                        <*> recur)
               ]
 
 instance (Produce a) => Produce (Tree a) where
-  produce input =
-    Node <$> recur input
+  produce =
+    Node <$> recur
          <*> frequency [ (1, return [])
-                       , (2, recur input) ]
+                       , (2, recur) ]

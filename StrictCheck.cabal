@@ -53,7 +53,7 @@ library
                         DeriveAnyClass, TypeOperators, PolyKinds, LambdaCase,
                         TupleSections, TypeFamilyDependencies,
                         MultiParamTypeClasses, DerivingStrategies,
-                        GeneralizedNewtypeDeriving, ViewPatterns
+                        GeneralizedNewtypeDeriving, ViewPatterns, ImplicitParams
 -- Do something about type defaults?
   ghc-options:         -Wall -fno-warn-unticked-promoted-constructors
 

@@ -3,6 +3,7 @@ module Test.StrictCheck.Internal.Inputs
   , Input(..)
   , Inputs(..)
   , draw
+  , getInputs
   ) where
 
 import Test.QuickCheck
@@ -30,6 +31,9 @@ data Input =
 -- is evaluated piecewise during the course of producing a function, thus
 -- triggering the partial evaluation of the original input to the function.
 newtype Inputs = Inputs [Input]
+
+getInputs :: Inputs -> [Input]
+getInputs (Inputs is) = is
 
 draw :: Input -> (Variant, [Input])
 draw (Input v is) = (v, is)
