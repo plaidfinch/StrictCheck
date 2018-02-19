@@ -193,7 +193,7 @@ showPrettyFieldThunkS qualifyNames thunk prec (RWrap (E pd)) =
 
 prettyDemand :: Shaped a => Demand a -> String
 prettyDemand d =
-  showPrettyFieldThunkS False "_" 10 (renderfold d) ""
+  showPrettyFieldThunkS False "_" 0 (renderfold d) ""
 
 printDemand :: Shaped a => Demand a -> IO ()
 printDemand = putStrLn . prettyDemand

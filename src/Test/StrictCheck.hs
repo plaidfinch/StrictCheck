@@ -98,16 +98,29 @@ data Evaluation f =
 instance (All Show (Args f), All Shaped (Args f), Shaped (Result f))
   => Show (Evaluation f) where
   show (Evaluation inputs inputsD resultD) =
-    "\nInput" ++ plural ++ ": " ++
-    showBulletedNPWith @Show (show . unI) inputs ++
-    "Demand on result: " ++ prettyDemand resultD ++
-    "\n────────────────────────────────────────\n" ++
-    "Demand on input" ++ plural ++ ": " ++
-    showBulletedNPWith @Shaped prettyDemand inputsD
+    "\n Input" ++ plural ++ ":              " ++ inputString ++
+    " Demand on result:   " ++ resultString ++
+    "\n" ++ replicate (19 `max` (80 `min` lineMax)) '─' ++ "\n" ++
+    " Demand on input" ++ plural ++ ":    " ++ demandString
     where
+      inputString =
+        showBulletedNPWith @Shaped (prettyDemand . interleave E . unI) inputs
+      resultString =
+        prettyDemand resultD
+      demandString =
+        showBulletedNPWith @Shaped prettyDemand inputsD
+
+      lineMax =
+        maximum . map
+        (\(lines -> ls) -> (if length ls == 1 then 22 else 0)
+                           + maximum (map length ls)) $
+        [inputString, resultString, demandString]
+
       plural = case inputs of
         (_ :* Nil) -> ""
         _          -> "s"
+
+-- TODO: For consistency, use prettyDemand to show inputs too
 
 showBulletedNPWith :: forall c g xs. All c xs
             => (forall x. c x => g x -> String) -> NP g xs -> String
@@ -117,7 +130,7 @@ showBulletedNPWith display list = "\n" ++ showNPWith' list
     showNPWith' :: forall ys. All c ys => NP g ys -> String
     showNPWith'      Nil = ""
     showNPWith' (y :* ys) =
-      "  • " ++ display y ++ "\n" ++ showNPWith' ys
+      "   • " ++ display y ++ "\n" ++ showNPWith' ys
 
 -- TODO: Do not export this constructor!
 
