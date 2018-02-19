@@ -19,7 +19,6 @@ import Data.Bifunctor
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
 import Test.StrictCheck.Curry
-import Test.StrictCheck.Curry.Function
 import Generics.SOP
 
 import           Data.List.NonEmpty  ( NonEmpty(..) )
@@ -31,7 +30,6 @@ import qualified Data.List.NonEmpty as NE
 -------------------------------------------------------
 
 -- TODO: parameterize over destruction pattern?
--- TODO: use implicit parameter for input! (and destrubtion pattern?)
 
 -- | Produce an arbitrary construction, but using Inputs to drive the
 -- implicit destruction of the original input value.
@@ -81,10 +79,10 @@ returning out =
 -- arity. This will usually be used in conjuntion with type application, to
 -- specify the type(s) of the argument(s) to the function.
 variadic ::
-  forall args result. (All Consume args, Curry args result, SListI args, ?inputs::Inputs)
+  forall args result. (All Consume args, Curry args, SListI args, ?inputs::Inputs)
          => ((?inputs::Inputs) => Gen result) -> Gen (args ⋯-> result)
 variadic out =
-  fmap (curryFunction @args . toFunction) . promote $ \args ->
+  fmap (curryAll @args) . promote $ \args ->
     let ?inputs =
           Inputs . (++ theInputs) $
             hcollapse $ hcliftA (Proxy :: Proxy Consume) (K . consume . unI) args

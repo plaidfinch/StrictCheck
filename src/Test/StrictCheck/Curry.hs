@@ -15,6 +15,11 @@ import Test.StrictCheck.Curry.Function
 import Data.Type.Equality
 import qualified Unsafe.Coerce as UNSAFE
 
+-- TODO: re-exports
+-- TODO: Factor this out into a separate package? Data.Function.Curry?
+-- TODO: make hlist-agnostic
+-- TODO: rename Function to Uncurried, update names
+
 
 -------------------------------------------------
 -- Manipulating the types of curried functions --
@@ -51,19 +56,19 @@ withCurryIdentity r = case curryIdentity @function of Refl -> r
 
 -- | The Curry class lets us embed a function in a Function, or extract it
 -- This is yet another "inductive typeclass" definition
-class Curry (args :: [*]) (result :: *) where
+class Curry (args :: [*]) where
    uncurryFunction :: (args ⋯-> result) -> Function args result
    curryFunction   :: Function args result -> (args ⋯-> result)
 
 -- | We can always move back and forth between a (Res x) and an x
-instance Curry '[] x where
+instance Curry '[] where
   uncurryFunction    x  = Res x
   curryFunction (Res x) =     x
 
 -- | If we know how to move back and forth between a Function on args & result
 -- and its corresponding function, we can do the same if we add one more
 -- argument to the front of the list and to its corresponding function
-instance Curry args result => Curry (a : args) result where
+instance Curry args => Curry (a : args) where
   uncurryFunction    f  = Arg $ \a -> uncurryFunction (f a)
   curryFunction (Arg f) =       \a -> curryFunction   (f a)
 
@@ -72,15 +77,11 @@ instance Curry args result => Curry (a : args) result where
 -- Variadic uncurrying/currying, aka (un)curryAll-ing --
 --------------------------------------------------------
 
-uncurryAll :: forall function.
-           Curry (Args function) (Result function)
-           => function
-           -> (NP I (Args function) -> Result function)
+uncurryAll
+  :: forall function. Curry (Args function)
+  => function -> (NP I (Args function) -> Result function)
 uncurryAll =
   withCurryIdentity @function $ applyFunction . uncurryFunction
 
-curryAll :: forall args result.
-         (Curry args result, SListI args)
-         => (NP I args -> result)
-         -> (args ⋯-> result)
+curryAll :: (Curry args, SListI args) => (NP I args -> result) -> (args ⋯-> result)
 curryAll = curryFunction . toFunction
