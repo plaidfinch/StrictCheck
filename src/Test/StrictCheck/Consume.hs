@@ -3,7 +3,7 @@ module Test.StrictCheck.Consume
   , Inputs
   , Consume(..)
   , constructor
-  , fields
+  , normalize
   , consumeTrivial
   , consumePrimitive
   ) where
@@ -30,9 +30,6 @@ constructor :: Int -> [Input] -> Input
 constructor n !is =
   Input (Variant (variant n)) is
 
-fields :: [Input] -> Input
-fields = constructor 0
-
 -- | Use the CoArbitrary instance for a type to consume it. This should only be
 -- used for "flat" types, i.e. those which contain no interesting substructure.
 consumePrimitive :: CoArbitrary a => a -> Input
@@ -50,6 +47,11 @@ consumeTrivial !_ =
 instance Consume (a -> b) where
   consume = consumeTrivial
 
+-- | Fully normalize something which can be consumed
+normalize :: Consume a => a -> ()
+normalize (consume -> input) = go input
+  where
+    go (Input _ is) = foldr seq () (map go is)
 
 --------------------------------------------
 -- Deriving Consume instances generically --

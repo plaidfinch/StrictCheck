@@ -18,6 +18,7 @@ import Test.StrictCheck.Curry
 import Test.StrictCheck.Shaped
 import Test.StrictCheck.Shaped.Flattened
 
+
 --------------------------------------------------------
 -- The basic types which make up a demand description --
 --------------------------------------------------------
@@ -196,3 +197,17 @@ prettyDemand d =
 
 printDemand :: Shaped a => Demand a -> IO ()
 printDemand = putStrLn . prettyDemand
+
+-- TODO: Comparisons module?
+
+eqDemand :: forall a. Shaped a => Demand a -> Demand a -> Bool
+eqDemand (Wrap  T)     (Wrap  T)     = True
+eqDemand (Wrap  T)     (Wrap (E _))  = False
+eqDemand (Wrap (E _))  (Wrap  T)     = False
+eqDemand (Wrap (E d1)) (Wrap (E d2)) =
+  match @a d1 d2 $
+    \(Flattened _ flatD1) -> maybe False $
+    \(Flattened _ flatD2) ->
+      all id . hcollapse $
+        hcliftA2 (Proxy :: Proxy Shaped)
+          ((K .) . eqDemand) flatD1 flatD2

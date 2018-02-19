@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 {-# language PartialTypeSignatures #-}
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 module Test.StrictCheck.Shaped where
