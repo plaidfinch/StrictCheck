@@ -57,16 +57,13 @@ testAppend =
     spineStrict testList  ~=? dIn1
   , whnf        testList2 ~=? dIn2
   ]
-  where (_ {-dOut-}, dIns) = observeNP
+  where (_ {-dOut-}, dIns) = observe
                                (spineStrictUpToContext $ length testList + 1)
-                               (uncurryAll (++)) args
+                               (++) testList testList2
 
         dIn1 = hd dIns
         dIn2 = hd (tl dIns)
   
-        args :: NP I '[[Integer], [Integer]]
-        args = I testList :* I testList2 :* Nil
-
 -- rotate (from Okasaki Queues) should be whnf strict on whnf
 rotate :: [a] -> [a] -> [a] -> [a]
 rotate []            []  as =                       as
