@@ -1,3 +1,6 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -ddump-splices #-}
+
 module Main where
 
 import Test.HUnit
@@ -10,6 +13,7 @@ import Test.StrictCheck.Observe
 import Test.StrictCheck.Instances
 import Test.StrictCheck.Demands
 import Test.StrictCheck.Shaped
+import Test.StrictCheck.TH
 import Test.StrictCheck.Shaped.Flattened
 
 import Generics.SOP
@@ -81,6 +85,8 @@ data BinTree a = Leaf
                | Node (BinTree a) a (BinTree a)
                deriving stock    (GHC.Generic, Show, Eq, Ord)
                deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped, NFData)
+
+$(derivePatternSynonyms ''BinTree)
 
 testTree1 :: BinTree Integer
 testTree1 = Node Leaf 1 Leaf
