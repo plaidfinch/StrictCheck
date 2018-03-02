@@ -53,8 +53,9 @@ matchPrim :: Eq a => Prim a f -> Prim a g
 matchPrim (Prim a) (Prim b) k =
   k (flatPrim a)
      (if a == b then (Just (flatPrim b)) else Nothing)
-  where
-    flatPrim x = Flattened (const (Prim x)) Nil
+
+flatPrim :: a -> Flattened (Prim a) g '[]
+flatPrim x = Flattened (const (Prim x)) Nil
 
 prettyPrim :: Show a => Prim a (K x) -> RenderLevel x
 prettyPrim (Prim a) = prettyConstant (show a)

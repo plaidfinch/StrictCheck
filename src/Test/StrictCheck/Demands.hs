@@ -11,7 +11,7 @@ whnf, nf, spineStrict
 
 whnf = Wrap . E . project (const (Wrap T))
 
-nf = interleave E
+nf = (E %)
 
 spineStrict =
   extrafold strictIfSame . I

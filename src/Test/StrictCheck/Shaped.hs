@@ -15,6 +15,7 @@ import qualified GHC.Generics as GHC
 
 import Test.StrictCheck.Shaped.Flattened
 
+-- TODO: provide instances for all of Base
 
 class Typeable a => Shaped (a :: *) where
   type Shape a :: (* -> *) -> *
@@ -51,6 +52,8 @@ class Typeable a => Shaped (a :: *) where
   render = gRender
 
 
+-- TODO: Derive single-value match, and a default-if-not-same match
+
 -------------------------------------
 -- Manipulating interleaved Shapes --
 -------------------------------------
@@ -78,6 +81,11 @@ extrafold :: forall a f g. (Functor g, Shaped a)
 extrafold coalg = Wrap . fmap (translate @a (extrafold coalg)) . coalg
 
 -- TODO: mapM, foldM, unfoldM, ...
+
+(%) :: forall a f. (Functor f, Shaped a)
+    => (forall x. x -> f x)
+    -> a -> f % a
+(%) = interleave
 
 interleave :: forall a f. (Functor f, Shaped a)
            => (forall x. x -> f x)

@@ -12,7 +12,7 @@ import Data.IORef
 import System.IO.Unsafe
 
 import qualified GHC.Generics as GHC
-import Generics.SOP
+import Generics.SOP hiding (Shape)
 
 import Test.StrictCheck.Curry
 import Test.StrictCheck.Shaped
@@ -23,10 +23,14 @@ import Test.StrictCheck.Shaped.Flattened
 -- The basic types which make up a demand description --
 --------------------------------------------------------
 
+-- TODO: rename Thunk constructors to allow patsyns to use these names
+
 data Thunk a = E !a | T
   deriving (Eq, Ord, Show, Functor, GHC.Generic, NFData)
 
 type Demand = (%) Thunk
+
+type PosDemand a = Shape a Demand
 
 
 ------------------------------------------------------
@@ -54,7 +58,7 @@ entangleShape =
   first (fuse unI)
   . (\(Pair l r) -> (l, r))
   . separate (uncurry Pair . first I . entangle . unI)
-  . interleave I
+  . (I %)
 
 observe1 :: (Shaped a, Shaped b, _)
          => (b -> ()) -> (a -> b) -> a -> (Demand b, Demand a)
@@ -101,29 +105,27 @@ observe context function =
 -- Shrinking demands --
 -----------------------
 
-shrinkDemand :: forall a. Shaped a => Demand a -> [Demand a]
-shrinkDemand (Wrap T)     = []
-shrinkDemand (Wrap (E d)) =
+shrinkDemand :: forall a. Shaped a => PosDemand a -> [PosDemand a]
+shrinkDemand d =
   match @a d d $ \(Flattened un flat) _ ->
-    case shrinkOne flat of
-      [] -> [Wrap T]
-      xs -> fmap (Wrap . E . un) xs
+    un <$> shrinkOne flat
   where
     shrinkOne :: All Shaped xs => NP Demand xs -> [NP Demand xs]
     shrinkOne Nil = []
     shrinkOne (Wrap T :* xs) =
       (Wrap T :*) <$> shrinkOne xs
-    shrinkOne (f@(Wrap (E _)) :* xs) =
-      fmap (:* xs) (shrinkDemand f) ++ fmap (f :* ) (shrinkOne xs)
+    shrinkOne ((Wrap (E f) :: Demand x) :* xs) =
+      fmap ((:* xs) . Wrap . E) (shrinkDemand @x f)
+      ++ fmap (Wrap (E f) :* ) (shrinkOne xs)
 
 
 ------------------------------------
 -- Evaluating demands as contexts --
 ------------------------------------
 
-evaluate :: forall a. Shaped a => Demand a -> a -> ()
-evaluate demand (interleave I -> value) =
-  go @a demand value
+evaluate :: forall a. Shaped a => PosDemand a -> a -> ()
+evaluate demand value =
+  go @a (Wrap (E demand)) (I % value)
   where
     go :: forall x. Shaped x => Thunk % x -> I % x -> ()
     go (Wrap T)     _            = ()

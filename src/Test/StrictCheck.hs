@@ -30,28 +30,17 @@ import Generics.SOP.NP
 import qualified GHC.Generics as GHC
 
 import Test.QuickCheck hiding (Args, Result, function)
-import Data.List
+import qualified Test.QuickCheck as QC
 
-import Test.StrictCheck.Internal.Inputs
+import Data.List
 import Control.DeepSeq
 import Data.Functor.Product
 import Data.Maybe
 import Data.Coerce
+import Data.IORef
+import System.IO
+import Control.Monad
 
-
-data Options xs =
-  Options { comparisons :: NP DemandComparison xs
-          , generators  :: NP Gen xs
-          , shrinks     :: NP Shrink xs
-          }
-
-defaultOptions :: (All Shaped xs, All Produce xs, All Arbitrary xs, SListI xs)
-        => Options xs
-defaultOptions =
-  Options { comparisons = compareEquality
-          , generators  = genViaProduce
-          , shrinks     = shrinkViaArbitrary
-          }
 
 compareEquality :: All Shaped xs => NP DemandComparison xs
 compareEquality = hcpure (Proxy :: Proxy Shaped) (DemandComparison eqDemand)
@@ -62,41 +51,125 @@ genViaProduce = hcpure (Proxy :: Proxy Produce) (freely produce)
 shrinkViaArbitrary :: All Arbitrary xs => NP Shrink xs
 shrinkViaArbitrary = hcpure (Proxy :: Proxy Arbitrary) (Shrink shrink)
 
+strictnessViaSized :: Gen Strictness
+strictnessViaSized = choose . (1,) =<< getSize
+
 newtype DemandComparison a =
   DemandComparison (Demand a -> Demand a -> Bool)
 
-compareToSpec
-  :: forall function. _
-  => Options (Args function)
+compareToSpec :: _ => (NP I args -> Demand result -> NP Demand args)
+              -> NP DemandComparison args
+              -> Evaluation args result
+              -> Maybe (NP Demand args)
+compareToSpec spec comparisons (Evaluation inputs inputsD resultD) =
+  let prediction = spec inputs (Wrap (E resultD))
+      correct =
+        all id . hcollapse $
+          hcliftA3 (Proxy :: Proxy Shaped)
+          (\(DemandComparison c) iD iD' -> K $ iD `c` iD')
+            comparisons
+            inputsD
+            prediction
+  in if correct then Nothing else Just prediction
+
+type Strictness = Int
+
+strictCheckWithResults ::
+  forall function evidence. _
+  => QC.Args
+  -> NP Shrink (Args function)
+  -> NP Gen (Args function)
+  -> Gen Strictness
+  -> (Evaluation (Args function) (Result function) -> Maybe evidence)
   -> function
-  -> (Demand (Result function)
-      -> NP I (Args function)
+  -> IO ( Maybe ( Evaluation (Args function) (Result function)
+                , evidence )
+        , QC.Result )
+strictCheckWithResults
+  qcArgs shrinks gens strictness predicate function = do
+    ref <- newIORef Nothing
+    result <-
+      quickCheckWithResult qcArgs{chatty = False} $
+        forAllShrink
+          (evaluationForall gens strictness function)
+          (shrinkEvalWith shrinks function) $
+            \example ->
+              case predicate example of
+                Nothing ->
+                  property True
+                Just evidence ->
+                  whenFail (writeIORef ref $ Just (example, evidence)) False
+    readIORef ref >>= \case
+      Nothing      -> pure (Nothing,      result)
+      Just example -> pure (Just example, result)
+
+strictCheckSpecExact
+  :: _
+  => (NP I (Args function)
+      -> Demand (Result function)
       -> NP Demand (Args function))
-  -> Property
-compareToSpec
-  Options{comparisons, generators, shrinks} function spec =
-    forAllShrink
-      (evaluationForall generators function)
-      (shrinkEvaluationWith shrinks function) $
-      \(Evaluation inputs inputsD resultD) ->
-          all id . hcollapse $
-            hcliftA3 (Proxy :: Proxy Shaped)
-              (\(DemandComparison c) iD iD' -> K $ iD `c` iD')
-              comparisons
-              inputsD
-              (spec resultD inputs)
+  -> function
+  -> IO ()
+strictCheckSpecExact spec function =
+  do (maybeExample, result) <-
+       strictCheckWithResults
+         stdArgs
+         shrinkViaArbitrary
+          genViaProduce
+          strictnessViaSized
+          (compareToSpec spec compareEquality)
+          function
+     (putStrLn . head . lines) (output result)
+     case maybeExample of
+       Nothing -> return ()
+       Just example ->
+         putStrLn (displayCounterSpec example)
+
+displayCounterSpec
+  :: forall args result. _ => (Evaluation args result, NP Demand args) -> String
+displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
+  inputString
+  ++ resultString
+  ++ "\n" ++ replicate (80 `min` lineMax) '─' ++ "\n"
+  ++ predictedDemandString
+  ++ demandString
+  where
+    inputString =
+      "\n Input" ++ plural ++ ":            "
+      ++ showBulletedNPWith @Shaped (prettyDemand . interleave E . unI) inputs
+    resultString =
+      " Demand on result:    "
+      ++ prettyDemand @result (Wrap (E resultD))
+    demandString =
+      " Demand on input" ++ plural ++ " (predicted):"
+      ++ showBulletedNPWith @Shaped prettyDemand predictedInputsD
+    predictedDemandString =
+      " Demand on input" ++ plural ++ " (actual):   "
+      ++ showBulletedNPWith @Shaped prettyDemand inputsD
+
+    lineMax =
+      maximum . map
+      (\(lines -> ls) -> maximum (map length ls) + 1) $
+      [inputString, resultString, demandString, predictedDemandString]
+
+    plural = case inputs of
+      (_ :* Nil) -> ""
+      _          -> "s"
+
 
 ------------------------------------------------------------
 -- An Evaluation is what we generate when StrictCheck-ing --
 ------------------------------------------------------------
 
-data Evaluation f =
-  Evaluation (NP I      (Args   f))  -- ^ Inputs to a function
-             (NP Demand (Args   f))  -- ^ Demands on the input
-             (   Demand (Result f))  -- ^ Demand on the result
+data Evaluation args result =
+  Evaluation (NP I      args)    -- ^ Inputs to a function
+             (NP Demand args)    -- ^ Demands on the input
+             (PosDemand result)  -- ^ Demand on the result
 
-instance (All Show (Args f), All Shaped (Args f), Shaped (Result f))
-  => Show (Evaluation f) where
+-- instance Show (Evaluation args result) where show _ = "<evaluation>"
+
+instance (All Show args, All Shaped args, Shaped result)
+  => Show (Evaluation args result) where
   show (Evaluation inputs inputsD resultD) =
     "\n Input" ++ plural ++ ":              " ++ inputString ++
     " Demand on result:   " ++ resultString ++
@@ -106,7 +179,7 @@ instance (All Show (Args f), All Shaped (Args f), Shaped (Result f))
       inputString =
         showBulletedNPWith @Shaped (prettyDemand . interleave E . unI) inputs
       resultString =
-        prettyDemand resultD
+        prettyDemand @result (Wrap (E resultD))
       demandString =
         showBulletedNPWith @Shaped prettyDemand inputsD
 
@@ -123,8 +196,8 @@ instance (All Show (Args f), All Shaped (Args f), Shaped (Result f))
 -- TODO: For consistency, use prettyDemand to show inputs too
 
 showBulletedNPWith :: forall c g xs. All c xs
-            => (forall x. c x => g x -> String) -> NP g xs -> String
-showBulletedNPWith display (x :* Nil) = display x ++ "\n"
+                   => (forall x. c x => g x -> String) -> NP g xs -> String
+showBulletedNPWith display (x :* Nil) = "   " ++ display x ++ "\n"
 showBulletedNPWith display list = "\n" ++ showNPWith' list
   where
     showNPWith' :: forall ys. All c ys => NP g ys -> String
@@ -141,19 +214,24 @@ showBulletedNPWith display list = "\n" ++ showNPWith' list
 
 evaluationForall
   :: forall f. (Consume (Result f), _)
-  => NP Gen (Args f) -> f -> Gen (Evaluation f)
-evaluationForall inputGens (uncurryAll -> function) = do
-  strictness <- choose . (1,) =<< getSize
-  context <- (forceOmega strictness .) <$> freely produce
-  inputs  <- hsequence inputGens
-  let (resultD, inputsD) = observeNP context function inputs
-  return $ Evaluation inputs inputsD resultD
-
-evaluation
-  :: forall f. (All Produce (Args f), Consume (Result f), _)
-  => f -> Gen (Evaluation f)
-evaluation =
-  evaluationForall (hcpure (Proxy :: Proxy Produce) (freely produce))
+  => NP Gen (Args f)
+  -> Gen Strictness
+  -> f
+  -> Gen (Evaluation (Args f) (Result f))
+evaluationForall gens strictnessGen function = do
+  inputs     <- hsequence gens
+  strictness <- strictnessGen
+  toOmega    <- freely produce
+  return (go strictness toOmega inputs)
+  where
+    -- If context is fully lazy, increase strictness until it forces something
+    go s tO is =
+      let (resultD, inputsD) =
+            observeNP (forceOmega s . tO) (uncurryAll function) is
+      in case resultD of
+        Wrap T -> go (s + 1) tO is
+        Wrap (E posResultD) ->
+          Evaluation is inputsD posResultD
 
 data Omega = Succ Omega
   deriving (GHC.Generic, Generic, HasDatatypeInfo, Shaped)
@@ -172,24 +250,26 @@ forceOmega n (Succ o) = forceOmega (n - 1) o
 
 newtype Shrink a = Shrink (a -> [a])
 
-shrinkEvaluationWith
-  :: forall f. _ => NP Shrink (Args f) -> f -> Evaluation f -> [Evaluation f]
-shrinkEvaluationWith
+-- TODO: make shrinking work instead over positive demands
+
+shrinkEvalWith
+  :: forall f. _
+  => NP Shrink (Args f) -> f -> Evaluation (Args f) (Result f) -> [Evaluation (Args f) (Result f)]
+shrinkEvalWith
   shrinks (uncurryAll -> function) (Evaluation inputs _ resultD) =
-    let shrunkDemands = shrinkDemand resultD
+    let shrunkDemands = shrinkDemand @(Result f) resultD
         shrunkInputs  = fairInterleave (axialShrinks shrinks inputs)
-        shrinkingDemand = map      (reObserve inputs)  shrunkDemands
-        shrinkingInputs = map (flip reObserve resultD) shrunkInputs
+        shrinkingDemand = mapMaybe      (reObserve inputs)  shrunkDemands
+        shrinkingInputs = mapMaybe (flip reObserve resultD) shrunkInputs
     in fairInterleave [ shrinkingDemand, shrinkingInputs ]
   where
-    reObserve :: NP I (Args f) -> Demand (Result f) -> Evaluation f
+    reObserve :: NP I (Args f) -> PosDemand (Result f) -> Maybe (Evaluation (Args f) (Result f))
     reObserve is rD =
       let (rD', isD) = observeNP (evaluate rD) function is
-      in Evaluation is isD rD'
-
-shrinkEvaluation :: forall f. _ => f -> Evaluation f -> [Evaluation f]
-shrinkEvaluation =
-  shrinkEvaluationWith (hcpure (Proxy :: Proxy Arbitrary) (Shrink shrink))
+      in fmap (Evaluation is isD) $
+           case rD' of
+             Wrap T       -> Nothing
+             Wrap (E pos) -> Just pos
 
 -- Fair n-ary axial shrinking (a.k.a. *fair* generalization of shrink on tuples)
 

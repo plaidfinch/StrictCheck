@@ -51,6 +51,13 @@ instance Shaped Integer where
   match      = matchPrim
   render     = prettyPrim
 
+instance (Typeable a, Typeable b) => Shaped (a -> b) where
+  type Shape (a -> b) = Prim (a -> b)
+  project = projectPrim
+  embed = embedPrim
+  match (Prim f) (Prim g) k = k (flatPrim f) (Just $ flatPrim g)
+  render _ = prettyConstant "<function>"
+
 -- instance (Typeable a, Typeable b) => Shaped (a -> b) where
 --   type Demand (a -> b) = Opaque (a -> b)
 --   projectD    = projectOpaque
