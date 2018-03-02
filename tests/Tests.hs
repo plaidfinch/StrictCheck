@@ -1,3 +1,6 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -ddump-splices #-}
+
 module Main where
 
 import Test.HUnit
@@ -10,6 +13,7 @@ import Test.StrictCheck.Observe
 import Test.StrictCheck.Instances
 import Test.StrictCheck.Demands
 import Test.StrictCheck.Shaped
+import Test.StrictCheck.TH
 import Test.StrictCheck.Shaped.Flattened
 
 import Generics.SOP
@@ -57,16 +61,13 @@ testAppend =
     spineStrict testList  ~=? dIn1
   , whnf        testList2 ~=? dIn2
   ]
-  where (_ {-dOut-}, dIns) = observeNP
+  where (_ {-dOut-}, dIns) = observe
                                (spineStrictUpToContext $ length testList + 1)
-                               (uncurryAll (++)) args
+                               (++) testList testList2
 
         dIn1 = hd dIns
         dIn2 = hd (tl dIns)
   
-        args :: NP I '[[Integer], [Integer]]
-        args = I testList :* I testList2 :* Nil
-
 -- rotate (from Okasaki Queues) should be whnf strict on whnf
 rotate :: [a] -> [a] -> [a] -> [a]
 rotate []            []  as =                       as
@@ -84,6 +85,8 @@ data BinTree a = Leaf
                | Node (BinTree a) a (BinTree a)
                deriving stock    (GHC.Generic, Show, Eq, Ord)
                deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped, NFData)
+
+$(derivePatternSynonyms ''BinTree)
 
 testTree1 :: BinTree Integer
 testTree1 = Node Leaf 1 Leaf
@@ -104,6 +107,31 @@ testReverseTree =
   whnf testTree3 ~=? dIn
   where (_ {-dOut-}, dIn) = observe1 whnfContext reverseTree testTree3
 
+data WeirdPair a b = LeftPair a
+                   | RightPair a b
+                   | Integer :** b
+               deriving stock    (GHC.Generic, Show, Eq, Ord)
+               deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped, NFData)
+
+$(derivePatternSynonyms ''WeirdPair)
+
+-- Some tests on using pattern synonyms
+testWP1 :: WeirdPair Integer ()
+testWP1 = LeftPair 1
+
+testWP2 :: WeirdPair Integer ()
+testWP2 = RightPair 1 ()
+
+testWP3 :: WeirdPair () ()
+testWP3 = 1 :** ()
+
+testPatSyn :: Test
+testPatSyn = TestList [
+    TestCase $ (LeftPair' (Wrap T))           @=? (whnf testWP1)
+  , TestCase $ (RightPair' (Wrap T) (Wrap T)) @=? (whnf testWP2)
+  , TestCase $ ((Wrap T) :**% (Wrap T))       @=? (whnf testWP3)
+  ]
+
 -- The main test suite containing all the tests
 testSuite :: Test
 testSuite = TestList [
@@ -112,6 +140,7 @@ testSuite = TestList [
   , TestLabel "Data.List foldr (+)"   testFoldrSum
   , TestLabel "Data.List (++)"        testAppend
   , TestLabel "BinTree   reverseTree" testReverseTree
+  , TestLabel "PatternSynonyms"       testPatSyn
   ]
 
 main :: IO ()

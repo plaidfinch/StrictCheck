@@ -29,7 +29,8 @@ library
                        containers >= 0.5.10,
                        generics-sop >= 0.3.2.0,
                        constraints >= 0.10,
-                       bifunctors >= 5.5
+                       bifunctors >= 5.5,
+                       template-haskell >= 2.12.0.0
   exposed-modules:     Test.StrictCheck
                        Test.StrictCheck.Curry,
                        Test.StrictCheck.Curry.Function
@@ -41,7 +42,8 @@ library
                        Test.StrictCheck.Internal.Inputs,
                        Test.StrictCheck.Instances,
                        Test.StrictCheck.Instances.Tools,
-                       Test.StrictCheck.Demands
+                       Test.StrictCheck.Demands,
+                       Test.StrictCheck.TH
                        -- Test.StrictCheck.Scratch.Observe,
                        -- Test.StrictCheck.Scratch.LazyCoArbitrary,
                        -- Test.StrictCheck.Scratch.Nats
@@ -54,7 +56,7 @@ library
                         TupleSections, TypeFamilyDependencies,
                         MultiParamTypeClasses, DerivingStrategies,
                         GeneralizedNewtypeDeriving, ViewPatterns, ImplicitParams,
-                        NamedFieldPuns
+                        NamedFieldPuns, PatternSynonyms
 -- Do something about type defaults?
   ghc-options:         -Wall -fno-warn-unticked-promoted-constructors
 
@@ -71,7 +73,8 @@ test-suite test-strictcheck
                         DeriveAnyClass, TypeOperators, PolyKinds, LambdaCase,
                         TupleSections, TypeFamilyDependencies,
                         MultiParamTypeClasses, DerivingStrategies,
-                        GeneralizedNewtypeDeriving, ViewPatterns
+                        GeneralizedNewtypeDeriving, ViewPatterns,
+                        PatternSynonyms
   ghc-options:         -Wall -fno-warn-unused-imports
   build-depends:        base,
                         HUnit,
