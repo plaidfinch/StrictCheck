@@ -20,22 +20,6 @@ import Data.Typeable
 import Control.Monad
 import Data.List
 
-instance Generic (Tree a)
-
-instance Consume ()
-instance (Consume a, Consume b) => Consume (a, b)
-instance (Consume a) => Consume [a]
-instance (Consume a) => Consume (Tree a)
-
-instance (Consume v) => Consume (Map k v) where
-  consume = constructor 0 . fmap (consume . snd) . Map.toList
-
-instance (Consume v) => Consume (Seq v) where
-  consume = constructor 0 . map consume . toList
-
-instance (Consume v) => Consume (Set v) where
-  consume = constructor 0 . map consume . Set.toList
-
 instance Shaped ()
 instance (Shaped a, Shaped b) => Shaped (a, b)
 instance Shaped a => Shaped [a]
@@ -50,6 +34,14 @@ instance Shaped Integer where
   embed      = embedPrim
   match      = matchPrim
   render     = prettyPrim
+
+instance Shaped Int where
+  type Shape Int = Prim Int
+  project    = projectPrim
+  embed      = embedPrim
+  match      = matchPrim
+  render     = prettyPrim
+
 
 instance (Typeable a, Typeable b) => Shaped (a -> b) where
   type Shape (a -> b) = Prim (a -> b)
@@ -111,14 +103,9 @@ instance (Typeable a, Typeable b) => Shaped (a -> b) where
 --   projectD p = projectContaining p . Set.toList
 --   embedD   e = Set.fromList . embedContaining e
 
-instance Produce () where
-  produce = arbitrary
-
-instance Produce Integer where
-  produce = arbitrary
-
-instance Consume Integer where
-  consume = consumePrimitive
+instance Produce () where produce = arbitrary
+instance Produce Int where produce = arbitrary
+instance Produce Integer where produce = arbitrary
 
 instance (Produce a, Produce b) => Produce (a, b) where
   produce =

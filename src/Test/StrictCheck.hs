@@ -1,22 +1,29 @@
-{-# language PartialTypeSignatures #-}
-{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
+{-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
 {-# OPTIONS_GHC -fno-warn-dodgy-exports -fno-warn-unused-imports #-}
 
 module Test.StrictCheck
-  -- ( module Test.StrictCheck.Curry
-  -- , module Test.StrictCheck.Produce
-  -- , module Test.StrictCheck.Consume
-  -- , module Test.StrictCheck.Observe
-  -- , module Test.StrictCheck.Instances
-  -- , module Test.StrictCheck.Demands
+  ( module Curry
+  , module Test.StrictCheck.Shaped
+  , module Test.StrictCheck.Produce
+  , module Test.StrictCheck.Consume
+  , module Test.StrictCheck.Observe
+  , module Test.StrictCheck.Instances
+  , module Test.StrictCheck.Demands
 
-  -- , module Generics.SOP
-  -- , module Generics.SOP.NP
-  -- )
+  , NP(..), I(..)
+
+  , strictCheckSpecExact
+  , strictCheckWithResults
+  , compareToSpecWith
+  , equalToSpec
+  , evaluationForall
+  , shrinkEvalWith
+  , Spec(..)
+  )
   where
 
 
-import Test.StrictCheck.Curry
+import Test.StrictCheck.Curry as Curry
 import Test.StrictCheck.Produce
 import Test.StrictCheck.Consume
 import Test.StrictCheck.Observe
@@ -25,7 +32,7 @@ import Test.StrictCheck.Demands
 import Test.StrictCheck.Shaped
 import Test.StrictCheck.Shaped.Flattened
 
-import Generics.SOP
+import Generics.SOP hiding (Shape)
 import Generics.SOP.NP
 import qualified GHC.Generics as GHC
 
@@ -37,10 +44,10 @@ import Control.DeepSeq
 import Data.Functor.Product
 import Data.Maybe
 import Data.Coerce
+import qualified Unsafe.Coerce as UNSAFE
 import Data.IORef
 import System.IO
 import Control.Monad
-
 
 compareEquality :: All Shaped xs => NP DemandComparison xs
 compareEquality = hcpure (Proxy :: Proxy Shaped) (DemandComparison eqDemand)
@@ -57,12 +64,48 @@ strictnessViaSized = choose . (1,) =<< getSize
 newtype DemandComparison a =
   DemandComparison (Demand a -> Demand a -> Bool)
 
-compareToSpec :: _ => (NP I args -> Demand result -> NP Demand args)
-              -> NP DemandComparison args
-              -> Evaluation args result
-              -> Maybe (NP Demand args)
-compareToSpec spec comparisons (Evaluation inputs inputsD resultD) =
-  let prediction = spec inputs (Wrap (E resultD))
+type family Map f args where
+  Map f '[       ] = '[]
+  Map f (a : args) = f a : Map f args
+
+fromMap :: forall f xs. NP I (Map f xs) -> NP f xs
+fromMap Nil           = UNSAFE.unsafeCoerce Nil
+fromMap (I fx :* fxs) =
+  UNSAFE.unsafeCoerce
+    ( UNSAFE.unsafeCoerce fx
+      :* fromMap @f (UNSAFE.unsafeCoerce fxs) )
+
+type Demands args = Map Demand args
+
+newtype Spec args result =
+  Spec (forall r. (Demands args ⋯-> r)
+        -> PosDemand result
+        -> args ⋯-> r)
+
+getSpec
+  :: forall r args result.
+  Spec args result
+  -> (Demands args ⋯-> r)
+  -> PosDemand result
+  -> args ⋯-> r
+getSpec (Spec s) k d = s @r k d
+
+curryCollect :: forall f (xs :: [*]). Curry (Map f xs) => Map f xs ⋯-> NP f xs
+curryCollect =
+  Curry.curry (id @(NP f xs) . fromMap . id @(NP I (Map f xs)))
+
+compareToSpecWith
+  :: forall args result.
+  (SListI args, All Shaped args, Curry args, Curry (Demands args))
+  => NP DemandComparison args
+  -> Spec args result
+  -> Evaluation args result
+  -> Maybe (NP Demand args)
+compareToSpecWith comparisons spec (Evaluation inputs inputsD resultD) =
+  let prediction =
+        Curry.uncurry
+          (getSpec @(NP Demand args) spec (curryCollect @Demand @args) resultD)
+          inputs
       correct =
         all id . hcollapse $
           hcliftA3 (Proxy :: Proxy Shaped)
@@ -72,10 +115,31 @@ compareToSpec spec comparisons (Evaluation inputs inputsD resultD) =
             prediction
   in if correct then Nothing else Just prediction
 
+equalToSpec
+  :: forall args result.
+  (SListI args, All Shaped args, Curry args, Curry (Demands args))
+  => Spec args result
+  -> Evaluation args result
+  -> Maybe (NP Demand args)
+equalToSpec spec e =
+  compareToSpecWith compareEquality spec e
+
 type Strictness = Int
 
+type StrictCheck function =
+  ( SListI (Args function)
+  , Shaped (Result function)
+  , Consume (Result function)
+  , Curry (Args function)
+  , Curry (Demands (Args function))
+  , NFData (Shape (Result function) Demand)
+  , All Show (Args function)
+  , All Shaped (Args function)
+  , All (Compose NFData Demand) (Args function))
+
 strictCheckWithResults ::
-  forall function evidence. _
+  forall function evidence.
+  StrictCheck function
   => QC.Args
   -> NP Shrink (Args function)
   -> NP Gen (Args function)
@@ -91,8 +155,8 @@ strictCheckWithResults
     result <-
       quickCheckWithResult qcArgs{chatty = False} $
         forAllShrink
-          (evaluationForall gens strictness function)
-          (shrinkEvalWith shrinks function) $
+          (evaluationForall @function gens strictness function)
+          (shrinkEvalWith @function shrinks function) $
             \example ->
               case predicate example of
                 Nothing ->
@@ -104,21 +168,23 @@ strictCheckWithResults
       Just example -> pure (Just example, result)
 
 strictCheckSpecExact
-  :: _
-  => (NP I (Args function)
-      -> Demand (Result function)
-      -> NP Demand (Args function))
-  -> function
-  -> IO ()
+  :: forall function.
+  ( StrictCheck function
+  , All Arbitrary (Args function)
+  , All Produce (Args function)
+  ) => Spec (Args function) (Result function)
+    -> function
+    -> IO ()
 strictCheckSpecExact spec function =
   do (maybeExample, result) <-
        strictCheckWithResults
          stdArgs
          shrinkViaArbitrary
-          genViaProduce
-          strictnessViaSized
-          (compareToSpec spec compareEquality)
-          function
+         genViaProduce
+         strictnessViaSized
+         (equalToSpec spec)
+         function
+     -- print result
      (putStrLn . head . lines) (output result)
      case maybeExample of
        Nothing -> return ()
@@ -126,7 +192,9 @@ strictCheckSpecExact spec function =
          putStrLn (displayCounterSpec example)
 
 displayCounterSpec
-  :: forall args result. _ => (Evaluation args result, NP Demand args) -> String
+  :: forall args result.
+  (Shaped result, All Shaped args, SListI args)
+  => (Evaluation args result, NP Demand args) -> String
 displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
   inputString
   ++ resultString
@@ -136,10 +204,10 @@ displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
   where
     inputString =
       "\n Input" ++ plural ++ ":            "
-      ++ showBulletedNPWith @Shaped (prettyDemand . interleave E . unI) inputs
+      ++ showBulletedNPWith @Shaped (prettyDemand . interleave Eval . unI) inputs
     resultString =
       " Demand on result:    "
-      ++ prettyDemand @result (Wrap (E resultD))
+      ++ prettyDemand @result (E resultD)
     demandString =
       " Demand on input" ++ plural ++ " (predicted):"
       ++ showBulletedNPWith @Shaped prettyDemand predictedInputsD
@@ -177,9 +245,9 @@ instance (All Show args, All Shaped args, Shaped result)
     " Demand on input" ++ plural ++ ":    " ++ demandString
     where
       inputString =
-        showBulletedNPWith @Shaped (prettyDemand . interleave E . unI) inputs
+        showBulletedNPWith @Shaped (prettyDemand . interleave Eval . unI) inputs
       resultString =
-        prettyDemand @result (Wrap (E resultD))
+        prettyDemand @result (E resultD)
       demandString =
         showBulletedNPWith @Shaped prettyDemand inputsD
 
@@ -213,11 +281,17 @@ showBulletedNPWith display list = "\n" ++ showNPWith' list
 -----------------------------------
 
 evaluationForall
-  :: forall f. (Consume (Result f), _)
-  => NP Gen (Args f)
-  -> Gen Strictness
-  -> f
-  -> Gen (Evaluation (Args f) (Result f))
+  :: forall f.
+  ( Curry (Args f)
+  , Consume (Result f)
+  , Shaped (Result f)
+  , All Shaped (Args f)
+  , NFData (Shape (Result f) Demand)
+  , All (Compose NFData Demand) (Args f)
+  ) => NP Gen (Args f)
+    -> Gen Strictness
+    -> f
+    -> Gen (Evaluation (Args f) (Result f))
 evaluationForall gens strictnessGen function = do
   inputs     <- hsequence gens
   strictness <- strictnessGen
@@ -225,12 +299,16 @@ evaluationForall gens strictnessGen function = do
   return (go strictness toOmega inputs)
   where
     -- If context is fully lazy, increase strictness until it forces something
+    go :: Strictness
+       -> (Result f -> Omega)
+       -> NP I (Args f)
+       -> Evaluation (Args f) (Result f)
     go s tO is =
       let (resultD, inputsD) =
-            observeNP (forceOmega s . tO) (uncurryAll function) is
+            observeNP (forceOmega s . tO) (uncurryAll @f function) is
       in case resultD of
-        Wrap T -> go (s + 1) tO is
-        Wrap (E posResultD) ->
+        T -> go (s + 1) tO is
+        E posResultD ->
           Evaluation is inputsD posResultD
 
 data Omega = Succ Omega
@@ -253,8 +331,16 @@ newtype Shrink a = Shrink (a -> [a])
 -- TODO: make shrinking work instead over positive demands
 
 shrinkEvalWith
-  :: forall f. _
-  => NP Shrink (Args f) -> f -> Evaluation (Args f) (Result f) -> [Evaluation (Args f) (Result f)]
+  :: forall f.
+  ( Curry (Args f)
+  , Shaped (Result f)
+  , All Shaped (Args f)
+  , All (Compose NFData Demand) (Args f)
+  , NFData (Shape (Result f) Demand)
+  ) => NP Shrink (Args f)
+    -> f
+    -> Evaluation (Args f) (Result f)
+    -> [Evaluation (Args f) (Result f)]
 shrinkEvalWith
   shrinks (uncurryAll -> function) (Evaluation inputs _ resultD) =
     let shrunkDemands = shrinkDemand @(Result f) resultD
@@ -268,8 +354,8 @@ shrinkEvalWith
       let (rD', isD) = observeNP (evaluate rD) function is
       in fmap (Evaluation is isD) $
            case rD' of
-             Wrap T       -> Nothing
-             Wrap (E pos) -> Just pos
+             T     -> Nothing
+             E pos -> Just pos
 
 -- Fair n-ary axial shrinking (a.k.a. *fair* generalization of shrink on tuples)
 
@@ -332,7 +418,7 @@ grid x y = map (\f -> map f [0..y]) $ map (,) [0..x]
 withGrid :: Integer -> Integer -> IO (Integer -> Integer -> Integer)
 withGrid x y = do
   f <- generate (freely produce)
-  let results = map (map (uncurry f)) (grid x y)
+  let results = map (map (Prelude.uncurry f)) (grid x y)
   putStrLn ""
   mapM_ print results
   putStrLn ""

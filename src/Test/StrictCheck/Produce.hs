@@ -82,7 +82,7 @@ variadic ::
   forall args result. (All Consume args, Curry args, SListI args, ?inputs::Inputs)
          => ((?inputs::Inputs) => Gen result) -> Gen (args ⋯-> result)
 variadic out =
-  fmap (curryAll @args) . promote $ \args ->
+  fmap (curryAll @args @_ @(NP I)) . promote $ \args ->
     let ?inputs =
           Inputs . (++ theInputs) $
             hcollapse $ hcliftA (Proxy :: Proxy Consume) (K . consume . unI) args

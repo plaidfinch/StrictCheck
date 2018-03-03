@@ -8,13 +8,14 @@ import Control.Monad.Identity
 import Data.Functor.Product
 import Data.Monoid ( Endo(..) )
 
+import Prelude
 import Data.IORef
 import System.IO.Unsafe
 
 import qualified GHC.Generics as GHC
 import Generics.SOP hiding (Shape)
 
-import Test.StrictCheck.Curry
+import Test.StrictCheck.Curry hiding (curry, uncurry)
 import Test.StrictCheck.Shaped
 import Test.StrictCheck.Shaped.Flattened
 
@@ -25,12 +26,20 @@ import Test.StrictCheck.Shaped.Flattened
 
 -- TODO: rename Thunk constructors to allow patsyns to use these names
 
-data Thunk a = E !a | T
+data Thunk a = Eval !a | Thunk
   deriving (Eq, Ord, Show, Functor, GHC.Generic, NFData)
 
 type Demand = (%) Thunk
 
 type PosDemand a = Shape a Demand
+
+{-# COMPLETE E, T #-}
+
+pattern E :: Shape a Demand -> Demand a
+pattern E a = Wrap (Eval a)
+
+pattern T :: Demand a
+pattern T = Wrap Thunk
 
 
 ------------------------------------------------------
@@ -46,9 +55,9 @@ eval !_ = pure ()
 entangle :: forall a. a -> (a, Thunk a)
 entangle a =
   unsafePerformIO $ do
-    ref <- newIORef T
+    ref <- newIORef Thunk
     return ( unsafePerformIO $ do
-               writeIORef ref (E a)
+               writeIORef ref (Eval a)
                return a
            , unsafePerformIO $ readIORef ref )
 
@@ -112,11 +121,11 @@ shrinkDemand d =
   where
     shrinkOne :: All Shaped xs => NP Demand xs -> [NP Demand xs]
     shrinkOne Nil = []
-    shrinkOne (Wrap T :* xs) =
-      (Wrap T :*) <$> shrinkOne xs
-    shrinkOne ((Wrap (E f) :: Demand x) :* xs) =
-      fmap ((:* xs) . Wrap . E) (shrinkDemand @x f)
-      ++ fmap (Wrap (E f) :* ) (shrinkOne xs)
+    shrinkOne (T :* xs) =
+      (T :*) <$> shrinkOne xs
+    shrinkOne ((E f :: Demand x) :* xs) =
+      fmap ((:* xs) . E) (shrinkDemand @x f)
+      ++ fmap (E f :* ) (shrinkOne xs)
 
 
 ------------------------------------
@@ -125,11 +134,11 @@ shrinkDemand d =
 
 evaluate :: forall a. Shaped a => PosDemand a -> a -> ()
 evaluate demand value =
-  go @a (Wrap (E demand)) (I % value)
+  go @a (E demand) (I % value)
   where
     go :: forall x. Shaped x => Thunk % x -> I % x -> ()
-    go (Wrap T)     _            = ()
-    go (Wrap (E d)) (Wrap (I v)) =
+    go T     _            = ()
+    go (E d) (Wrap (I v)) =
       match @x d v $
         \(Flattened _ fieldsD) -> maybe () $
         \(Flattened _ fieldsV) ->
@@ -143,8 +152,8 @@ evaluate demand value =
 
 showPrettyFieldThunkS
   :: Bool -> String -> Int -> Rendered Thunk -> String -> String
-showPrettyFieldThunkS _            thunk _    (RWrap T)      = (thunk ++)
-showPrettyFieldThunkS qualifyNames thunk prec (RWrap (E pd)) =
+showPrettyFieldThunkS _            thunk _    (RWrap Thunk)      = (thunk ++)
+showPrettyFieldThunkS qualifyNames thunk prec (RWrap (Eval pd)) =
   case pd of
     ConstructorD name fields ->
       showParen (prec > 10 && length fields > 0) $
@@ -203,10 +212,10 @@ printDemand = putStrLn . prettyDemand
 -- TODO: Comparisons module?
 
 eqDemand :: forall a. Shaped a => Demand a -> Demand a -> Bool
-eqDemand (Wrap  T)     (Wrap  T)     = True
-eqDemand (Wrap  T)     (Wrap (E _))  = False
-eqDemand (Wrap (E _))  (Wrap  T)     = False
-eqDemand (Wrap (E d1)) (Wrap (E d2)) =
+eqDemand T      T      = True
+eqDemand T      (E _)  = False
+eqDemand (E _)  T      = False
+eqDemand (E d1) (E d2) =
   match @a d1 d2 $
     \(Flattened _ flatD1) -> maybe False $
     \(Flattened _ flatD2) ->

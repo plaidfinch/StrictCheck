@@ -9,9 +9,9 @@ import Test.StrictCheck.Shaped
 whnf, nf, spineStrict
   :: forall a. Shaped a => a -> Demand a
 
-whnf = Wrap . E . project (const (Wrap T))
+whnf = E . project (const T)
 
-nf = (E %)
+nf = (Eval %)
 
 spineStrict =
   extrafold strictIfSame . I
@@ -19,8 +19,8 @@ spineStrict =
     strictIfSame :: forall x. Shaped x => I x -> Thunk (Shape x I)
     strictIfSame (I x) =
       case eqTypeRep (typeOf x) (typeRep @a) of
-        Nothing    -> T
-        Just HRefl -> E (project @a I x)
+        Nothing    -> Thunk
+        Just HRefl -> Eval (project @a I x)
 
 data Striated a t where
   Same :: a -> Striated a a
