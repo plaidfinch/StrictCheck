@@ -25,6 +25,8 @@ import qualified GHC.Generics as GHC
 
 import Data.List
 
+import Knapsack
+
 -- Tests on lists
 testList :: [Integer]
 testList = [1,2,3,4,5,6]
