@@ -127,9 +127,9 @@ testWP3 = 1 :** ()
 
 testPatSyn :: Test
 testPatSyn = TestList [
-    TestCase $ (LeftPair' (Wrap T))           @=? (whnf testWP1)
-  , TestCase $ (RightPair' (Wrap T) (Wrap T)) @=? (whnf testWP2)
-  , TestCase $ ((Wrap T) :**% (Wrap T))       @=? (whnf testWP3)
+    TestCase $ (LeftPair' (Wrap Thunk))           @=? (whnf testWP1)
+  , TestCase $ (RightPair' (Wrap Thunk) (Wrap Thunk)) @=? (whnf testWP2)
+  , TestCase $ ((Wrap Thunk) :**% (Wrap Thunk))       @=? (whnf testWP3)
   ]
 
 -- The main test suite containing all the tests
