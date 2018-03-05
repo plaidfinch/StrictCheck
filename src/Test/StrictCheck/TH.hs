@@ -3,7 +3,7 @@
 module Test.StrictCheck.TH where
 
 import Generics.SOP (NP(..), NS(..), SOP(..), I(..), Rep)
-import Test.StrictCheck.Observe
+import Test.StrictCheck.Observe (Thunk(..), Demand)
 import Test.StrictCheck.Shaped
 
 import Control.Monad (when)
@@ -25,7 +25,7 @@ prefixPatternDec idx patName binderNames npPat =
   PatSynD patName
           (PrefixPatSyn binderNames)
           ImplBidir
-          (ConP 'Wrap [ConP 'E [ConP 'GD [sumPattern idx npPat]]])
+          (ConP 'Wrap [ConP 'Eval [ConP 'GD [sumPattern idx npPat]]])
 
 infixPatternDec :: Int
                 -> Name
@@ -36,7 +36,7 @@ infixPatternDec idx patName lhsBinder rhsBinder npPat =
   PatSynD patName
           (InfixPatSyn lhsBinder rhsBinder)
           ImplBidir
-          (ConP 'Wrap [ConP 'E [ConP 'GD [sumPattern idx npPat]]])
+          (ConP 'Wrap [ConP 'Eval [ConP 'GD [sumPattern idx npPat]]])
 
 sumPattern :: Int -> Pat -> Pat
 sumPattern idx p | idx <= 0  = ConP 'Z [p]
