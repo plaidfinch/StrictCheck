@@ -33,7 +33,6 @@ library
                        template-haskell >= 2.12.0.0
   exposed-modules:     Test.StrictCheck
                        Test.StrictCheck.Curry,
-                       Test.StrictCheck.Curry.Function
                        Test.StrictCheck.Consume,
                        Test.StrictCheck.Produce,
                        Test.StrictCheck.Observe,
