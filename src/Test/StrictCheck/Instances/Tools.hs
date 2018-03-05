@@ -33,7 +33,7 @@ embedContainer   e (Container x) =            fmap e x
 
 newtype Prim (x :: *) (f :: * -> *) = Prim x
   deriving (Eq, Ord, Show, GHC.Generic)
-  deriving newtype NFData
+  deriving newtype (NFData, Num)
 
 unPrim :: Prim x f -> x
 unPrim (Prim x) = x

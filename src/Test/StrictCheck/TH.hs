@@ -9,6 +9,8 @@ import Test.StrictCheck.Shaped
 import Control.Monad (when)
 import Language.Haskell.TH
 
+-- TODO: generate COMPLETE pragmas to avoid partiality warnings
+
 -- | Generates the proper type signature for a pattern. The first
 -- argument is the list of constructor field types, and the second
 -- argument is the type of the constructor constructs. This function

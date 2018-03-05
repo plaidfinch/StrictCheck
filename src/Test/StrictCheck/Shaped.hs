@@ -70,6 +70,18 @@ translate :: forall a f g. Shaped a
 translate t d = match @a d d $ \flat _ ->
   unflatten $ mapFlattened @Shaped t flat
 
+reshape :: forall b a f g. (Shaped a, Shaped b, Functor f)
+        => (f (Shape b ((%) g)) -> g (Shape b ((%) g)))
+        -> (forall x. Shaped x => f % x -> g % x)
+        -> f % a -> g % a
+reshape homo hetero d =
+  case eqT @a @b of
+    Nothing   -> hetero d
+    Just Refl ->
+      Wrap
+      $ homo . fmap (translate @a (reshape @b homo hetero))
+      $ unwrap d
+
 intrafold :: forall a f g. (Functor f, Shaped a)
           => (forall x. Shaped x => f (Shape x g) -> g x)
           -> f % a -> g a
@@ -150,7 +162,7 @@ type QName = (ModuleName, DatatypeName, String)
 ---------------------------------------------------
 
 newtype GShape a f =
-  GD (NS (NP f) (Code a))
+  GS (NS (NP f) (Code a))
 
 type GShaped a =
   ( Generic a
@@ -163,12 +175,12 @@ gProject :: GShaped a
          => (forall x. Shaped x => x -> f x)
          -> a -> Shape a f
 gProject p !(from -> sop) =
-  GD (unSOP (hcliftA (Proxy :: Proxy Shaped) (p . unI) sop))
+  GS (unSOP (hcliftA (Proxy :: Proxy Shaped) (p . unI) sop))
 
 gEmbed :: GShaped a
        => (forall x. Shaped x => f x -> x)
        -> Shape a f -> a
-gEmbed e !(GD d) =
+gEmbed e !(GS d) =
   to (hcliftA (Proxy :: Proxy Shaped) (I . e) (SOP d))
 
 gMatch :: forall a f g result. GShaped a
@@ -178,7 +190,7 @@ gMatch :: forall a f g result. GShaped a
              -> Maybe (Flattened (Shape a) g xs)
              -> result)
        -> result
-gMatch !(GD df) !(GD dg) cont =
+gMatch !(GS df) !(GS dg) cont =
   go @(Code a) df (Just dg) $ \flatF mflatG ->
     cont (flatGD flatF) (flatGD <$> mflatG)
   where
@@ -219,11 +231,11 @@ gMatch !(GD df) !(GD dg) cont =
     flatGD :: forall t h xs.
       Flattened (Flip SOP (Code t)) h xs -> Flattened (GShape t) h xs
     flatGD (Flattened un fields) =
-      Flattened (GD . coerce . un) fields
+      Flattened (GS . coerce . un) fields
 
 gRender :: forall a x. (HasDatatypeInfo a, GShaped a)
          => Shape a (K x) -> RenderLevel x
-gRender (GD demand) =
+gRender (GS demand) =
   case info of
     ADT m d cs ->
       renderC m d demand cs
@@ -266,6 +278,22 @@ deriving stock   instance (Eq     (f (Shape a ((%) f)))) => Eq     (f % a)
 deriving stock   instance (Ord    (f (Shape a ((%) f)))) => Ord    (f % a)
 deriving stock   instance (Show   (f (Shape a ((%) f)))) => Show   (f % a)
 deriving newtype instance (NFData (f (Shape a ((%) f)))) => NFData (f % a)
+
+instance Num (f (Shape a ((%) f))) => Num (f % a) where
+  (+)         = onWrap2 (+)
+  (-)         = onWrap2 (-)
+  (*)         = onWrap2 (*)
+  abs         = onWrap abs
+  signum      = onWrap signum
+  fromInteger = Wrap . fromInteger
+
+onWrap :: (f (Shape a ((%) f)) -> f (Shape b ((%) f)))
+       -> f % a -> f % b
+onWrap f (Wrap a) = Wrap (f a)
+
+onWrap2 :: (f (Shape a ((%) f)) -> f (Shape b ((%) f)) -> f (Shape c ((%) f)))
+        -> f % a -> f % b -> f % c
+onWrap2 f (Wrap a) (Wrap b) = Wrap (f a b)
 
 deriving instance GHC.Generic (GShape a f)
 deriving instance ( SListI (Code a)

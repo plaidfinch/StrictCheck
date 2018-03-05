@@ -4,6 +4,7 @@ module Test.StrictCheck.Observe where
 
 import Control.DeepSeq
 import Data.Bifunctor
+import Control.Applicative
 import Control.Monad.Identity
 import Data.Functor.Product
 import Data.Monoid ( Endo(..) )
@@ -11,6 +12,7 @@ import Data.Monoid ( Endo(..) )
 import Prelude
 import Data.IORef
 import System.IO.Unsafe
+import Control.Exception as Exception
 
 import qualified GHC.Generics as GHC
 import Generics.SOP hiding (Shape)
@@ -28,6 +30,20 @@ import Test.StrictCheck.Shaped.Flattened
 
 data Thunk a = Eval !a | Thunk
   deriving (Eq, Ord, Show, Functor, GHC.Generic, NFData)
+
+instance Applicative Thunk where
+  pure = Eval
+  Thunk  <*> _      = Thunk
+  _      <*> Thunk  = Thunk
+  Eval f <*> Eval a = Eval (f a)
+
+instance Num a => Num (Thunk a) where
+  (+)         = liftA2 (+)
+  (-)         = liftA2 (-)
+  (*)         = liftA2 (*)
+  abs         = fmap abs
+  signum      = fmap signum
+  fromInteger = Eval . fromInteger
 
 type Demand = (%) Thunk
 
