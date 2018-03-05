@@ -60,6 +60,12 @@ pattern T = Wrap Thunk
 thunk :: forall a. a
 thunk = throw Unevaluated
 
+isThunk :: Shaped a => a -> Bool
+isThunk a =
+  case toDemand a of
+    T -> True
+    _ -> False
+
 -- TODO: Do not export Unevaluated's constructor
 data Unevaluated = Unevaluated deriving Show
 instance Exception Unevaluated

@@ -135,7 +135,7 @@ type StrictCheck function =
   , Curry (Args function)
   , Curry (Demands (Args function))
   , NFData (Shape (Result function) Demand)
-  , All Show (Args function)
+  , All Show (Args function)  -- TODO: fix this
   , All Shaped (Args function)
   , All (Compose NFData Demand) (Args function))
 
