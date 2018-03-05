@@ -69,3 +69,7 @@ rot_spec =
              || length (ontoD []) + length bs == 0
              then []
              else thunk))
+
+expectTotal :: Shaped a => a -> a
+expectTotal a =
+  if isThunk a then error "expectTotal: given thunk" else a
