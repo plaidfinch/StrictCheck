@@ -25,7 +25,7 @@ prefixPatternDec idx patName binderNames npPat =
   PatSynD patName
           (PrefixPatSyn binderNames)
           ImplBidir
-          (ConP 'Wrap [ConP 'Eval [ConP 'GD [sumPattern idx npPat]]])
+          (ConP 'Wrap [ConP 'Eval [ConP 'GS [sumPattern idx npPat]]])
 
 infixPatternDec :: Int
                 -> Name
@@ -36,7 +36,7 @@ infixPatternDec idx patName lhsBinder rhsBinder npPat =
   PatSynD patName
           (InfixPatSyn lhsBinder rhsBinder)
           ImplBidir
-          (ConP 'Wrap [ConP 'Eval [ConP 'GD [sumPattern idx npPat]]])
+          (ConP 'Wrap [ConP 'Eval [ConP 'GS [sumPattern idx npPat]]])
 
 sumPattern :: Int -> Pat -> Pat
 sumPattern idx p | idx <= 0  = ConP 'Z [p]

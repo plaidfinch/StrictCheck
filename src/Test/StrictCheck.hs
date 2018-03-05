@@ -78,25 +78,24 @@ fromMap (I fx :* fxs) =
 type Demands args = Map Demand args
 
 newtype Spec args result =
-  Spec (forall r. (Demands args ⋯-> r)
-        -> PosDemand result
+  Spec (forall r. (args ⋯-> r)
+        -> result
         -> args ⋯-> r)
 
 getSpec
   :: forall r args result.
   Spec args result
-  -> (Demands args ⋯-> r)
-  -> PosDemand result
+  -> (args ⋯-> r)
+  -> result
   -> args ⋯-> r
 getSpec (Spec s) k d = s @r k d
 
-curryCollect :: forall f (xs :: [*]). Curry (Map f xs) => Map f xs ⋯-> NP f xs
-curryCollect =
-  Curry.curry (id @(NP f xs) . fromMap . id @(NP I (Map f xs)))
+curryCollect :: forall (xs :: [*]) r. Curry xs => (NP I xs -> r) -> xs ⋯-> r
+curryCollect k = Curry.curry @xs k
 
 compareToSpecWith
   :: forall args result.
-  (SListI args, All Shaped args, Curry args, Curry (Demands args))
+  (SListI args, All Shaped args, Curry args, Curry (Demands args), Shaped result)
   => NP DemandComparison args
   -> Spec args result
   -> Evaluation args result
@@ -104,7 +103,7 @@ compareToSpecWith
 compareToSpecWith comparisons spec (Evaluation inputs inputsD resultD) =
   let prediction =
         Curry.uncurry
-          (getSpec @(NP Demand args) spec (curryCollect @Demand @args) resultD)
+          (getSpec @(NP Demand args) spec collectDemands (fromDemand $ E resultD))
           inputs
       correct =
         all id . hcollapse $
@@ -114,10 +113,13 @@ compareToSpecWith comparisons spec (Evaluation inputs inputsD resultD) =
             inputsD
             prediction
   in if correct then Nothing else Just prediction
+  where
+    collectDemands :: args ⋯-> NP Demand args
+    collectDemands = curryCollect @args (hcmap (Proxy :: Proxy Shaped) (toDemand . unI))
 
 equalToSpec
   :: forall args result.
-  (SListI args, All Shaped args, Curry args, Curry (Demands args))
+  (SListI args, All Shaped args, Curry args, Curry (Demands args), Shaped result)
   => Spec args result
   -> Evaluation args result
   -> Maybe (NP Demand args)

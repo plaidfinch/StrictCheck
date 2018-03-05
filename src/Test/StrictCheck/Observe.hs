@@ -57,6 +57,9 @@ pattern E a = Wrap (Eval a)
 pattern T :: Demand a
 pattern T = Wrap Thunk
 
+thunk :: forall a. a
+thunk = throw Unevaluated
+
 -- TODO: Do not export Unevaluated's constructor
 data Unevaluated = Unevaluated deriving Show
 instance Exception Unevaluated
