@@ -19,6 +19,7 @@ module Test.StrictCheck
   , evaluationForall
   , shrinkEvalWith
   , Spec(..)
+  , Evaluation(..)
   )
   where
 
@@ -48,6 +49,7 @@ import qualified Unsafe.Coerce as UNSAFE
 import Data.IORef
 import System.IO
 import Control.Monad
+import Type.Reflection
 
 compareEquality :: All Shaped xs => NP DemandComparison xs
 compareEquality = hcpure (Proxy :: Proxy Shaped) (DemandComparison eqDemand)
@@ -67,13 +69,6 @@ newtype DemandComparison a =
 type family Map f args where
   Map f '[       ] = '[]
   Map f (a : args) = f a : Map f args
-
-fromMap :: forall f xs. NP I (Map f xs) -> NP f xs
-fromMap Nil           = UNSAFE.unsafeCoerce Nil
-fromMap (I fx :* fxs) =
-  UNSAFE.unsafeCoerce
-    ( UNSAFE.unsafeCoerce fx
-      :* fromMap @f (UNSAFE.unsafeCoerce fxs) )
 
 type Demands args = Map Demand args
 
@@ -135,7 +130,7 @@ type StrictCheck function =
   , Curry (Args function)
   , Curry (Demands (Args function))
   , NFData (Shape (Result function) Demand)
-  , All Show (Args function)  -- TODO: fix this
+  , All Typeable (Args function)
   , All Shaped (Args function)
   , All (Compose NFData Demand) (Args function))
 
@@ -236,32 +231,19 @@ data Evaluation args result =
              (NP Demand args)    -- ^ Demands on the input
              (PosDemand result)  -- ^ Demand on the result
 
--- instance Show (Evaluation args result) where show _ = "<evaluation>"
-
-instance (All Show args, All Shaped args, Shaped result)
+instance (All Typeable args, Typeable result)
   => Show (Evaluation args result) where
-  show (Evaluation inputs inputsD resultD) =
-    "\n Input" ++ plural ++ ":              " ++ inputString ++
-    " Demand on result:   " ++ resultString ++
-    "\n" ++ replicate (19 `max` (80 `min` lineMax)) '─' ++ "\n" ++
-    " Demand on input" ++ plural ++ ":    " ++ demandString
+  show _ =
+    "<Evaluation"
+    ++ " @[" ++ intercalate ", " argTypes ++ "]"
+    ++ " @" ++ show (typeRep :: TypeRep result)
+    ++ ">"
     where
-      inputString =
-        showBulletedNPWith @Shaped (prettyDemand . interleave Eval . unI) inputs
-      resultString =
-        prettyDemand @result (E resultD)
-      demandString =
-        showBulletedNPWith @Shaped prettyDemand inputsD
-
-      lineMax =
-        maximum . map
-        (\(lines -> ls) -> (if length ls == 1 then 22 else 0)
-                           + maximum (map length ls)) $
-        [inputString, resultString, demandString]
-
-      plural = case inputs of
-        (_ :* Nil) -> ""
-        _          -> "s"
+      argTypes :: [String]
+      argTypes =
+        hcollapse
+        $ hliftA (K . show)
+        $ (hcpure (Proxy :: Proxy Typeable) typeRep :: NP TypeRep args)
 
 -- TODO: For consistency, use prettyDemand to show inputs too
 
