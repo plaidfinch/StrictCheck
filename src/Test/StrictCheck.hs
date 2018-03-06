@@ -134,12 +134,14 @@ type StrictCheck function =
   , All Shaped (Args function)
   , All (Compose NFData Demand) (Args function))
 
+-- TODO: CPS n-ary products out of the interface?
+
 strictCheckWithResults ::
   forall function evidence.
   StrictCheck function
   => QC.Args
-  -> NP Shrink (Args function)
-  -> NP Gen (Args function)
+  -> NP Shrink (Args function)  -- TODO: allow dependent shrinking
+  -> NP Gen (Args function)     -- TODO: allow dependent generation
   -> Gen Strictness
   -> (Evaluation (Args function) (Result function) -> Maybe evidence)
   -> function
@@ -188,48 +190,49 @@ strictCheckSpecExact spec function =
        Just example ->
          putStrLn (displayCounterSpec example)
 
--- TODO: Even prettier pretty-printing (dialog box style?)
+-- TODO: Move this pretty-printing elsewhere
+-- TODO: Use this to show Evaluations?
 
 displayCounterSpec
   :: forall args result.
   (Shaped result, All Shaped args, SListI args)
   => (Evaluation args result, NP Demand args) -> String
 displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
-  beside inputBox (repeat " ") resultBox
+  beside inputBox ("   " : "───" : repeat "   ") resultBox
+  ++ replicate (2 `max` (subtract 2 $ lineMax 40 [inputString] `div` 2)) ' '
+  ++ "🡓 🡓 🡓\n"
   ++ beside
        actualBox
-       ("╥" : "║" : "╫" :
-        replicate (length (lines inputString)) "║"
-        ++ "╨" : repeat "")
+       ("       " : "       " : "  ═╱═  " : repeat "       ")
        predictedBox
   where
     inputBox =
-      box "╭" '─'         "╮"
-          "│" inputHeader "│"
+      box "┌" '─'         "┐"
+          "│" inputHeader "├"
           "├" '─'         "┤"
           "│" inputString "│"
-          "╰" '─'         "╯"
+          "└" '─'         "┘"
 
     resultBox =
-      box "╭" '─'          "╮"
-          "│" resultHeader "│"
+      box "┌" '─'          "┐"
+          "┤" resultHeader "│"
           "├" '─'          "┤"
           "│" resultString "│"
-          "╰" '─'          "╯"
+          "└" '─'          "┘"
 
     actualBox =
-      box "╭" '─'                ""
-          "│" actualHeader       ""
-          "├" '─'                ""
-          "│" actualDemandString ""
-          "╰" '─'                ""
+      box "┌" '─'                "┐"
+          "│" actualHeader       "│"
+          "├" '─'                "┤"
+          "│" actualDemandString "│"
+          "└" '─'                "┘"
 
     predictedBox =
-      box "" '─'                   "╮"
-          "" predictedHeader       "│"
-          "" '─'                   "┤"
-          "" predictedDemandString "│"
-          "" '─'                   "╯"
+      box "┌" '─'                   "┐"
+          "│" predictedHeader       "│"
+          "├" '─'                   "┤"
+          "│" predictedDemandString "│"
+          "└" '─'                   "┘"
 
     inputHeader = " Input" ++ plural
     resultHeader = " Demand on result"
