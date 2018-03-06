@@ -20,7 +20,7 @@ map_spec
 map_spec =
   Spec $ \predict d f xs ->
     predict
-      (if all isThunk (cap d) then thunk else f)
+      (if all isThunk (cap d) then thunk else thunk)
       (zipWith (specify1 f) d xs)
 
 replaceThunk :: Shaped a => [a] -> [a] -> [a]

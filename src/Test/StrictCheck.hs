@@ -188,38 +188,114 @@ strictCheckSpecExact spec function =
        Just example ->
          putStrLn (displayCounterSpec example)
 
+-- TODO: Even prettier pretty-printing (dialog box style?)
+
 displayCounterSpec
   :: forall args result.
   (Shaped result, All Shaped args, SListI args)
   => (Evaluation args result, NP Demand args) -> String
 displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
-  inputString
-  ++ resultString
-  ++ "\n" ++ replicate (80 `min` lineMax) '─' ++ "\n"
-  ++ predictedDemandString
-  ++ demandString
+  beside inputBox (repeat " ") resultBox
+  ++ beside
+       actualBox
+       ("╥" : "║" : "╫" :
+        replicate (length (lines inputString)) "║"
+        ++ "╨" : repeat "")
+       predictedBox
   where
-    inputString =
-      "\n Input" ++ plural ++ ":            "
-      ++ showBulletedNPWith @Shaped (prettyDemand . interleave Eval . unI) inputs
-    resultString =
-      " Demand on result:    "
-      ++ prettyDemand @result (E resultD)
-    demandString =
-      " Demand on input" ++ plural ++ " (predicted):"
-      ++ showBulletedNPWith @Shaped prettyDemand predictedInputsD
-    predictedDemandString =
-      " Demand on input" ++ plural ++ " (actual):   "
-      ++ showBulletedNPWith @Shaped prettyDemand inputsD
+    inputBox =
+      box "╭" '─'         "╮"
+          "│" inputHeader "│"
+          "├" '─'         "┤"
+          "│" inputString "│"
+          "╰" '─'         "╯"
 
-    lineMax =
-      maximum . map
-      (\(lines -> ls) -> maximum (map length ls) + 1) $
-      [inputString, resultString, demandString, predictedDemandString]
+    resultBox =
+      box "╭" '─'          "╮"
+          "│" resultHeader "│"
+          "├" '─'          "┤"
+          "│" resultString "│"
+          "╰" '─'          "╯"
+
+    actualBox =
+      box "╭" '─'                ""
+          "│" actualHeader       ""
+          "├" '─'                ""
+          "│" actualDemandString ""
+          "╰" '─'                ""
+
+    predictedBox =
+      box "" '─'                   "╮"
+          "" predictedHeader       "│"
+          "" '─'                   "┤"
+          "" predictedDemandString "│"
+          "" '─'                   "╯"
+
+    inputHeader = " Input" ++ plural
+    resultHeader = " Demand on result"
+    actualHeader = " Actual input demand" ++ plural
+    predictedHeader = " Predicted input demand" ++ plural
+
+    inputString =
+      showBulletedNPWith @Shaped (prettyDemand . interleave Eval . unI) inputs
+    resultString = " " ++ prettyDemand @result (E resultD)
+    actualDemandString =
+      showBulletedNPWith @Shaped prettyDemand inputsD
+    predictedDemandString =
+      showBulletedNPWith @Shaped prettyDemand predictedInputsD
+
+    rule w l c r = frame w l (replicate w c) r ++ "\n"
+
+    frame w before str after =
+      before ++ str
+      ++ (replicate (w - length str) ' ')
+      ++ after
+
+    frames w before para after =
+      unlines $ map (\str -> frame w before str after) (lines para)
+
+    beside l cs r =
+      unlines . take (length ls `max` length rs) $
+        zipWith3
+          (\x c y -> x ++ c ++ y)
+          (ls ++ repeat "")
+          cs
+          (rs ++ repeat "")
+      where
+        ls = lines l
+        rs = lines r
+
+    box top_l    top    top_r
+        header_l header header_r
+        div_l    div_c  div_r
+        body_l   body   body_r
+        bottom_l bottom bottom_r =
+      let w = lineMax 40 [header, body]
+      in rule   w top_l    top    top_r
+      ++ frames w header_l header header_r
+      ++ rule   w div_l    div_c  div_r
+      ++ frames w body_l   body   body_r
+      ++ rule   w bottom_l bottom bottom_r
+
+    lineMax n strs =
+      n `min`
+        (maximum . map
+          (\(lines -> ls) -> maximum (map length ls) + 1) $ strs)
 
     plural = case inputs of
       (_ :* Nil) -> ""
       _          -> "s"
+
+    showBulletedNPWith
+      :: forall c g xs. All c xs
+      => (forall x. c x => g x -> String) -> NP g xs -> String
+    -- showBulletedNPWith display (x :* Nil) = " " ++ display x ++ "\n"
+    showBulletedNPWith display list = showNPWith' list
+      where
+        showNPWith' :: forall ys. All c ys => NP g ys -> String
+        showNPWith'      Nil = ""
+        showNPWith' (y :* ys) =
+          " • " ++ display y ++ "\n" ++ showNPWith' ys
 
 
 ------------------------------------------------------------
@@ -234,28 +310,15 @@ data Evaluation args result =
 instance (All Typeable args, Typeable result)
   => Show (Evaluation args result) where
   show _ =
-    "<Evaluation"
-    ++ " @[" ++ intercalate ", " argTypes ++ "]"
-    ++ " @" ++ show (typeRep :: TypeRep result)
-    ++ ">"
+    "<Evaluation> :: Evaluation"
+    ++ " '[" ++ intercalate ", " argTypes ++ "]"
+    ++ " " ++ show (typeRep :: TypeRep result)
     where
       argTypes :: [String]
       argTypes =
         hcollapse
         $ hliftA (K . show)
         $ (hcpure (Proxy :: Proxy Typeable) typeRep :: NP TypeRep args)
-
--- TODO: For consistency, use prettyDemand to show inputs too
-
-showBulletedNPWith :: forall c g xs. All c xs
-                   => (forall x. c x => g x -> String) -> NP g xs -> String
-showBulletedNPWith display (x :* Nil) = "   " ++ display x ++ "\n"
-showBulletedNPWith display list = "\n" ++ showNPWith' list
-  where
-    showNPWith' :: forall ys. All c ys => NP g ys -> String
-    showNPWith'      Nil = ""
-    showNPWith' (y :* ys) =
-      "   • " ++ display y ++ "\n" ++ showNPWith' ys
 
 -- TODO: Do not export this constructor!
 

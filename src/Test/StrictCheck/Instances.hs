@@ -16,7 +16,7 @@ import qualified Data.Set as Set
 import Data.Foldable
 import Data.Sequence (Seq)
 import Generics.SOP
-import Data.Typeable
+import Type.Reflection
 import Control.Monad
 import Data.List
 
@@ -48,7 +48,7 @@ instance (Typeable a, Typeable b) => Shaped (a -> b) where
   project = projectPrim
   embed = embedPrim
   match (Prim f) (Prim g) k = k (flatPrim f) (Just $ flatPrim g)
-  render _ = prettyConstant "<function>"
+  render _ = prettyConstant ("<function> :: " ++ show (typeRep @(a -> b)))
 
 -- instance (Typeable a, Typeable b) => Shaped (a -> b) where
 --   type Demand (a -> b) = Opaque (a -> b)
