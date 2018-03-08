@@ -18,6 +18,9 @@ module Test.StrictCheck
   , equalToSpec
   , evaluationForall
   , shrinkEvalWith
+  , shrinkViaArbitrary
+  , genViaProduce
+  , strictnessViaSized
   , Spec(..)
   , Evaluation(..)
   )
