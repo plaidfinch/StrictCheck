@@ -2,12 +2,13 @@ module Test.StrictCheck.Examples.Lists where
 
 import Test.StrictCheck
 import Control.DeepSeq
+import Data.Functor
 -- import Data.List
 
 length_spec :: Shaped a => Spec '[[a]] Int
 length_spec =
   Spec $ \predict _ xs ->
-    predict (replicate (length xs) thunk)
+    predict (xs $> thunk)
 
 take_spec :: Shaped a => Spec '[Int, [a]] [a]
 take_spec =

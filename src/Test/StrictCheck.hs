@@ -152,7 +152,7 @@ strictCheckWithResults
   qcArgs shrinks gens strictness predicate function = do
     ref <- newIORef Nothing
     result <-
-      quickCheckWithResult qcArgs{chatty = False} $
+      quickCheckWithResult qcArgs{chatty = False{-, maxSuccess = 10000-}} $
         forAllShrink
           (evaluationForall @function gens strictness function)
           (shrinkEvalWith @function shrinks function) $
@@ -199,7 +199,8 @@ displayCounterSpec
   => (Evaluation args result, NP Demand args) -> String
 displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
   beside inputBox ("   " : "───" : repeat "   ") resultBox
-  ++ replicate (2 `max` (subtract 2 $ lineMax 40 [inputString] `div` 2)) ' '
+  ++ (flip replicate ' ' $
+       (2 `max` (subtract 2 $ (lineMax [inputString] `div` 2))))
   ++ "🡓 🡓 🡓\n"
   ++ beside
        actualBox
@@ -237,7 +238,7 @@ displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
     inputHeader = " Input" ++ plural
     resultHeader = " Demand on result"
     actualHeader = " Actual input demand" ++ plural
-    predictedHeader = " Predicted input demand" ++ plural
+    predictedHeader = " Spec's input demand" ++ plural
 
     inputString =
       showBulletedNPWith @Shaped (prettyDemand . interleave Eval . unI) inputs
@@ -261,7 +262,7 @@ displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
       unlines . take (length ls `max` length rs) $
         zipWith3
           (\x c y -> x ++ c ++ y)
-          (ls ++ repeat "")
+          (ls ++ repeat (replicate (lineMax [l]) ' '))
           cs
           (rs ++ repeat "")
       where
@@ -273,17 +274,16 @@ displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
         div_l    div_c  div_r
         body_l   body   body_r
         bottom_l bottom bottom_r =
-      let w = lineMax 40 [header, body]
+      let w = lineMax [header, body]
       in rule   w top_l    top    top_r
       ++ frames w header_l header header_r
       ++ rule   w div_l    div_c  div_r
       ++ frames w body_l   body   body_r
       ++ rule   w bottom_l bottom bottom_r
 
-    lineMax n strs =
-      n `min`
-        (maximum . map
-          (\(lines -> ls) -> maximum (map length ls) + 1) $ strs)
+    lineMax strs =
+      (maximum . map
+        (\(lines -> ls) -> maximum (map length ls) + 1) $ strs)
 
     plural = case inputs of
       (_ :* Nil) -> ""

@@ -42,6 +42,14 @@ instance Shaped Int where
   match      = matchPrim
   render     = prettyPrim
 
+instance Shaped Char where
+  type Shape Char = Prim Char
+  project    = projectPrim
+  embed      = embedPrim
+  match      = matchPrim
+  render     = prettyPrim
+
+instance Shaped Bool
 
 instance (Typeable a, Typeable b) => Shaped (a -> b) where
   type Shape (a -> b) = Prim (a -> b)
