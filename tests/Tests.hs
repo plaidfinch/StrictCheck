@@ -27,6 +27,7 @@ import Data.List
 
 import qualified Test.StrictCheck.Examples.Lists as EL
 import Knapsack
+import Specs
 
 -- Tests on lists
 testList :: [Integer]
@@ -148,6 +149,7 @@ testSuite = TestList [
 
 main :: IO ()
 main = do
+
   -- Hook for testing that the rotate rewrite is correct
   strictCheckSpecExact EL.rot_simple_spec (EL.rot' @Int)
   
@@ -166,3 +168,13 @@ main = do
 --  if errors result + failures result > 0
 --    then exitFailure
 --    else exitSuccess
+
+  putStrLn "Running example specs:"
+  runSpecs
+
+  putStrLn "Running unit tests:"
+  result <- runTestTT testSuite
+  putStrLn $ showCounts result
+  if errors result + failures result > 0
+    then exitFailure
+    else exitSuccess

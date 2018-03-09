@@ -144,3 +144,21 @@ test_rot d xs ys =
 expectTotal :: Shaped a => a -> a
 expectTotal a =
   if isThunk a then error "expectTotal: given thunk" else a
+
+append_spec :: Shaped a => Spec '[[a], [a]] [a]
+append_spec =
+  Spec $ \predict d ls rs ->
+    let spineLen   = length . cap $ d ++ [undefined]  -- number of spine thunks forced
+        overLs     = spineLen > length ls             -- forced all of ls?
+        overRs     = spineLen > length ls + length rs -- forced all of bs?
+        (ls', rs') = splitAt (length ls) (cap d)
+    in predict
+         (ls' ++ if overLs then [] else thunk)
+         (rs' ++ if overRs then [] else thunk)
+
+reverse_spec :: Shaped a => Spec '[[a]] [a]
+reverse_spec =
+  Spec $ \predict d xs ->
+    let padLen = length xs - length (cap d)
+        spinePad = replicate padLen thunk
+    in  predict $ spinePad ++ (reverse (cap d))
