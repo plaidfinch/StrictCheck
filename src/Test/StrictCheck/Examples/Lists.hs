@@ -131,7 +131,7 @@ rot_simple_spec =
         demandOnBs
           | length (cap d) > length fs ||
             (null bs && length fs == length (cap d) && length fs /= length (cap $ d ++ [thunk])) =
-              take (length bs) $ reverse (drop (length fs) d) ++ repeat thunk
+              reverse $ take (length bs) $ (drop (length fs) (cap d)) ++ repeat thunk
           | otherwise =
               thunk
     in predict demandOnFs demandOnBs
