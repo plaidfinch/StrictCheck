@@ -25,7 +25,7 @@ import qualified GHC.Generics as GHC
 
 import Data.List
 
-import Knapsack
+import Specs
 
 -- Tests on lists
 testList :: [Integer]
@@ -147,6 +147,10 @@ testSuite = TestList [
 
 main :: IO ()
 main = do
+  putStrLn "Running example specs:"
+  runSpecs
+
+  putStrLn "Running unit tests:"
   result <- runTestTT testSuite
   putStrLn $ showCounts result
   if errors result + failures result > 0
