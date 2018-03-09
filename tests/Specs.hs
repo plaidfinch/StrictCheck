@@ -20,6 +20,12 @@ runSpecs = do
   putStrLn "Checking rot_spec..."
   strictCheckSpecExact rot_spec (rot :: [Int] -> [Int] -> [Int])
 
+  putStrLn "Checking append_spec..."
+  strictCheckSpecExact append_spec ((++) :: [Int] -> [Int] -> [Int])
+
+  putStrLn "Checking reverse_spec..."
+  strictCheckSpecExact reverse_spec (reverse :: [Int] -> [Int])
+
   putStrLn "Checking knapsack..."
   strictCheckWithResults
     stdArgs{maxSize=100, maxSuccess=500}
