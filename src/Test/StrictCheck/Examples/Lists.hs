@@ -5,6 +5,8 @@ import Control.DeepSeq
 import Data.Functor
 -- import Data.List
 
+import Debug.Trace
+
 length_spec :: Shaped a => Spec '[[a]] Int
 length_spec =
   Spec $ \predict _ xs ->
@@ -67,6 +69,9 @@ rotate (f : fs) (b : bs) as = f : rotate fs bs (b : as)
 rot :: [a] -> [a] -> [a]
 rot fs bs = rotate fs bs []
 
+rot' :: [a] -> [a] -> [a]
+rot' fs bs = fs ++ reverse bs
+
 rot_spec :: Shaped a => Spec '[[a], [a]] [a]
 rot_spec =
   Spec $ \predict d fs bs ->
@@ -84,6 +89,53 @@ rot_spec =
          (                    fs' ++ if overflow            then [] else thunk)
          (spinePad ++ reverse bs' ++ if overflow || overrot then [] else thunk)
 
+--rot_spec' :: Shaped a => Spec '[[a], [a]] [a]
+--rot_spec' =
+--  Spec $ \predict outputDemand fs bs ->
+--    predict predictedFsDemand predictedBsDemand
+--  where predictedFsDemand
+--          | outputDemandLength < length fs =
+--              outputDemand ++ thunk
+--          | otherwise =
+--              fsPartOfOutDemand
+--        predictedBsDemand
+--          | outputDemandLength < length bs =
+--              
+--          | otherwise = 
+-- 
+--    let (fs', bs') = splitAt (length fs) (cap d)
+--        spineLen  = length (cap (d ++ [undefined]))  -- # of spine thunks forced
+--        overflow  = spineLen       > length fs  -- begun taking from bs?
+--        overrot   = length (cap d) > length bs  -- forced all of bs?
+--        padLength =
+--          length bs `min`
+--            if overflow
+--            then length bs - length bs'
+--            else length (cap d)
+--        spinePad = replicate padLength thunk
+--    in predict
+--         (                    fs' ++ if overflow            then [] else thunk)
+--         (spinePad ++ reverse bs' ++ if overflow || overrot then [] else thunk)
+
+rot_spec' :: Shaped a => Spec '[[a], [a]] [a]
+rot_spec' = rot_spec
+
+-- Leo: Still not working...
+rot_simple_spec :: (Show a, Shaped a) => Spec '[[a], [a]] [a]
+rot_simple_spec =
+  Spec $ \predict d fs bs ->
+    let demandOnFs
+          | length (cap d) > length fs =
+              take (length fs) d
+          | otherwise = d
+        demandOnBs
+          | length (cap d) > length fs ||
+            (null bs && length fs == length (cap d) && length fs /= length (cap $ d ++ [thunk])) =
+              take (length bs) $ reverse (drop (length fs) d) ++ repeat thunk
+          | otherwise =
+              thunk
+    in predict demandOnFs demandOnBs
+                               
 test_rot :: [Int] -> [Int] -> [Int] -> IO ()
 test_rot d xs ys =
   (\(x :* y :* Nil) -> printDemand x >> printDemand y)

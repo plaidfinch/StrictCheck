@@ -25,6 +25,7 @@ import qualified GHC.Generics as GHC
 
 import Data.List
 
+import qualified Test.StrictCheck.Examples.Lists as EL
 import Knapsack
 
 -- Tests on lists
@@ -147,8 +148,21 @@ testSuite = TestList [
 
 main :: IO ()
 main = do
-  result <- runTestTT testSuite
-  putStrLn $ showCounts result
-  if errors result + failures result > 0
-    then exitFailure
-    else exitSuccess
+  -- Hook for testing that the rotate rewrite is correct
+  strictCheckSpecExact EL.rot_simple_spec (EL.rot' @Int)
+  
+--  putStrLn "rotate spec"
+--  strictCheckSpecExact EL.rot_spec (EL.rot @Int)
+--  putStrLn "reverse + append (should fail)"
+--  strictCheckSpecExact EL.rot_spec (EL.rot' @Int)
+--  putStrLn "rewritten spec on rotate"
+--  strictCheckSpecExact EL.rot_spec' (EL.rot @Int)
+--  putStrLn "rewritten spec on rev ++ append (should fail)"
+--  strictCheckSpecExact EL.rot_spec' (EL.rot' @Int)
+-- 
+--  -- Original test suite
+--  result <- runTestTT testSuite
+--  putStrLn $ showCounts result
+--  if errors result + failures result > 0
+--    then exitFailure
+--    else exitSuccess
