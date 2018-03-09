@@ -68,7 +68,7 @@ solution :: LMap (Int, Int) Int
 solution = fix solutionStep
 
 pattern Pair' :: Demand a -> Demand b -> Demand (a, b)
-pattern Pair' x y = Wrap (Eval (GD (Z (x :* y :* Nil))))
+pattern Pair' x y = Wrap (Eval (GS (Z (x :* y :* Nil))))
 
 lookupD :: Demand (LMap (Int, Int) Int) -> (Int, Int) -> Demand Int
 lookupD Empty'                        _   = Wrap Thunk
