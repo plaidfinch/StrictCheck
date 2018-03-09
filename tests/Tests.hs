@@ -26,7 +26,6 @@ import qualified GHC.Generics as GHC
 import Data.List
 
 import qualified Test.StrictCheck.Examples.Lists as EL
-import Knapsack
 import Specs
 
 -- Tests on lists
@@ -169,12 +168,12 @@ main = do
 --    then exitFailure
 --    else exitSuccess
 
-  putStrLn "Running example specs:"
-  runSpecs
-
-  putStrLn "Running unit tests:"
-  result <- runTestTT testSuite
-  putStrLn $ showCounts result
-  if errors result + failures result > 0
-    then exitFailure
-    else exitSuccess
+--  putStrLn "Running example specs:"
+--  runSpecs
+-- 
+--  putStrLn "Running unit tests:"
+--  result <- runTestTT testSuite
+--  putStrLn $ showCounts result
+--  if errors result + failures result > 0
+--    then exitFailure
+--    else exitSuccess
