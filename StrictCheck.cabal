@@ -43,8 +43,8 @@ library
                        Test.StrictCheck.Instances.Tools,
                        Test.StrictCheck.Demands,
                        Test.StrictCheck.TH,
-                       Test.StrictCheck.Examples.Lists
-                       -- Test.StrictCheck.Examples.Map
+                       Test.StrictCheck.Examples.Lists,
+                       Test.StrictCheck.Examples.Map
                        -- Test.StrictCheck.Scratch.Observe,
                        -- Test.StrictCheck.Scratch.LazyCoArbitrary,
                        -- Test.StrictCheck.Scratch.Nats
