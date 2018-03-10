@@ -150,16 +150,16 @@ main :: IO ()
 main = do
 
   -- Hook for testing that the rotate rewrite is correct
-  strictCheckSpecExact EL.rot_simple_spec (EL.rot' @Int)
+  -- strictCheckSpecExact EL.rot_simple_spec (EL.rot' @Int)
   
---  putStrLn "rotate spec"
---  strictCheckSpecExact EL.rot_spec (EL.rot @Int)
---  putStrLn "reverse + append (should fail)"
---  strictCheckSpecExact EL.rot_spec (EL.rot' @Int)
---  putStrLn "rewritten spec on rotate"
---  strictCheckSpecExact EL.rot_spec' (EL.rot @Int)
---  putStrLn "rewritten spec on rev ++ append (should fail)"
---  strictCheckSpecExact EL.rot_spec' (EL.rot' @Int)
+  putStrLn "rotate spec"
+  strictCheckSpecExact EL.rot_spec (EL.rot @Int)
+  putStrLn "reverse + append (should fail)"
+  strictCheckSpecExact EL.rot_spec (EL.rot' @Int)
+  putStrLn "rewritten spec on rotate"
+  strictCheckSpecExact EL.rot_spec' (EL.rot @Int)
+  putStrLn "rewritten spec on rev ++ append (should fail)"
+  strictCheckSpecExact EL.rot_spec' (EL.rot' @Int)
 -- 
 --  -- Original test suite
 --  result <- runTestTT testSuite
