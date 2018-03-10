@@ -89,36 +89,47 @@ rot_spec =
          (                    fs' ++ if overflow            then [] else thunk)
          (spinePad ++ reverse bs' ++ if overflow || overrot then [] else thunk)
 
---rot_spec' :: Shaped a => Spec '[[a], [a]] [a]
---rot_spec' =
---  Spec $ \predict outputDemand fs bs ->
---    predict predictedFsDemand predictedBsDemand
---  where predictedFsDemand
---          | outputDemandLength < length fs =
---              outputDemand ++ thunk
---          | otherwise =
---              fsPartOfOutDemand
---        predictedBsDemand
---          | outputDemandLength < length bs =
---              
---          | otherwise = 
--- 
---    let (fs', bs') = splitAt (length fs) (cap d)
---        spineLen  = length (cap (d ++ [undefined]))  -- # of spine thunks forced
---        overflow  = spineLen       > length fs  -- begun taking from bs?
---        overrot   = length (cap d) > length bs  -- forced all of bs?
---        padLength =
---          length bs `min`
---            if overflow
---            then length bs - length bs'
---            else length (cap d)
---        spinePad = replicate padLength thunk
---    in predict
---         (                    fs' ++ if overflow            then [] else thunk)
---         (spinePad ++ reverse bs' ++ if overflow || overrot then [] else thunk)
-
 rot_spec' :: Shaped a => Spec '[[a], [a]] [a]
-rot_spec' = rot_spec
+rot_spec' =
+  Spec $ \predict d fs bs ->
+    let demandOnFs
+          | length (cap d) > length fs =
+              take (length fs) (cap d)
+          | otherwise = d
+        demandOnBs
+          | length (cap $ d ++ [thunk]) >= length bs =
+              reverse $ take (length bs)
+                      $ drop (length fs) (cap d) ++ repeat thunk
+          | otherwise =
+              (reverse $ take (length (cap $ d ++ [thunk]))
+                      $ drop (length fs) (cap d) ++ repeat thunk) ++ thunk
+    in predict demandOnFs demandOnBs
+--   where predictedFsDemand
+--           | outputDemandLength < length fs =
+--               outputDemand ++ thunk
+--           | otherwise =
+--               fsPartOfOutDemand
+--         predictedBsDemand
+--           | outputDemandLength < length bs =
+--               
+--           | otherwise = 
+--  
+--     let (fs', bs') = splitAt (length fs) (cap d)
+--         spineLen  = length (cap (d ++ [undefined]))  -- # of spine thunks forced
+--         overflow  = spineLen       > length fs  -- begun taking from bs?
+--         overrot   = length (cap d) > length bs  -- forced all of bs?
+--         padLength =
+--           length bs `min`
+--             if overflow
+--             then length bs - length bs'
+--             else length (cap d)
+--         spinePad = replicate padLength thunk
+--     in predict
+--          (                    fs' ++ if overflow            then [] else thunk)
+--          (spinePad ++ reverse bs' ++ if overflow || overrot then [] else thunk)
+
+--rot_spec' :: Shaped a => Spec '[[a], [a]] [a]
+--rot_spec' = rot_spec
 
 -- Leo: Still not working...
 rot_simple_spec :: (Show a, Shaped a) => Spec '[[a], [a]] [a]
