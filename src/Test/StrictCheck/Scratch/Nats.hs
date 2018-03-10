@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-type-defaults -fno-warn-name-shadowing #-}
+  {-# OPTIONS_GHC -fno-warn-type-defaults -fno-warn-name-shadowing #-}
 
 {-# LANGUAGE TypeApplications, TupleSections, DeriveAnyClass, DeriveGeneric #-}
 
@@ -173,12 +173,3 @@ minNat :: Nat -> Nat -> Nat
 minNat    Z     _  = Z
 minNat    _     Z  = Z
 minNat (S m) (S n) = S (minNat m n)
-
--- Using Generate.hs
-instance Produce Nat where
-  produce inputs = do
-    frequency [ (1, return Z)
-              , (2, S <$> recur inputs)
-              ]
-
-instance Consume Nat
