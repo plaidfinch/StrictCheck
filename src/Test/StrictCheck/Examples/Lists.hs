@@ -97,10 +97,10 @@ rot_spec' =
               take (length fs) (cap d)
           | otherwise = d
         demandOnBs
-          | length (cap $ d ++ [undefined]) > length fs = 
+          | length (cap $ d ++ [undefined]) > length fs =
               reverse $ take (length bs)
                       $ drop (length fs) (cap d) ++ repeat thunk
-          | length (cap d) > length bs = 
+          | length (cap d) > length bs =
               reverse $ drop (length fs) (cap d) ++ replicate (length bs) thunk
           | otherwise =
               (reverse $ drop (length fs) (cap d) ++ replicate (length (cap d)) thunk) ++ thunk
@@ -112,9 +112,9 @@ rot_spec' =
 --               fsPartOfOutDemand
 --         predictedBsDemand
 --           | outputDemandLength < length bs =
---               
---           | otherwise = 
---  
+--
+--           | otherwise =
+--
 --     let (fs', bs') = splitAt (length fs) (cap d)
 --         spineLen  = length (cap (d ++ [undefined]))  -- # of spine thunks forced
 --         overflow  = spineLen       > length fs  -- begun taking from bs?
@@ -133,7 +133,7 @@ rot_spec' =
 --rot_spec' = rot_spec
 
 -- Leo: Still not working...
-rot_simple_spec :: (Show a, Shaped a) => Spec '[[a], [a]] [a]
+rot_simple_spec :: Shaped a => Spec '[[a], [a]] [a]
 rot_simple_spec =
   Spec $ \predict d fs bs ->
     let demandOnFs
@@ -147,7 +147,7 @@ rot_simple_spec =
           | otherwise =
               thunk
     in predict demandOnFs demandOnBs
-                               
+
 test_rot :: [Int] -> [Int] -> [Int] -> IO ()
 test_rot d xs ys =
   (\(x :* y :* Nil) -> printDemand x >> printDemand y)
