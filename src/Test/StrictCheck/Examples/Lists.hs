@@ -97,12 +97,13 @@ rot_spec' =
               take (length fs) (cap d)
           | otherwise = d
         demandOnBs
-          | length (cap $ d ++ [thunk]) >= length bs =
+          | length (cap $ d ++ [undefined]) > length fs = 
               reverse $ take (length bs)
                       $ drop (length fs) (cap d) ++ repeat thunk
+          | length (cap d) > length bs = 
+              reverse $ drop (length fs) (cap d) ++ replicate (length bs) thunk
           | otherwise =
-              (reverse $ take (length (cap $ d ++ [thunk]))
-                      $ drop (length fs) (cap d) ++ repeat thunk) ++ thunk
+              (reverse $ drop (length fs) (cap d) ++ replicate (length (cap d)) thunk) ++ thunk
     in predict demandOnFs demandOnBs
 --   where predictedFsDemand
 --           | outputDemandLength < length fs =
