@@ -12,6 +12,12 @@ length_spec =
   Spec $ \predict _ xs ->
     predict (xs $> thunk)
 
+take' :: Int -> [a] -> [a]
+take' _      [] = []
+take' n (x : xs)
+  | n > 0     = x : take' (n-1) xs
+  | otherwise = []
+
 take_spec :: Shaped a => Spec '[Int, [a]] [a]
 take_spec =
   Spec $ \predict d n xs ->
@@ -174,3 +180,23 @@ reverse_spec =
     let padLen = length xs - length (cap d)
         spinePad = replicate padLen thunk
     in  predict $ spinePad ++ (reverse (cap d))
+
+zip' :: [a] -> [b] -> [(a, b)]
+zip' [      ] [      ] = []
+zip' (_ : as) [      ] = zip' as []
+zip' [      ] (_ : bs) = zip' [] bs
+zip' (a : as) (b : bs) = (a, b) : zip' as bs
+
+zip_spec :: (Shaped a, Shaped b) => Spec '[[a], [b]] [(a, b)]
+zip_spec =
+  Spec $ \predict d as bs ->
+    let (d_as, d_bs) = unzip d
+    in predict
+         (if      length (cap d_bs) > length as
+          && not (length (cap d_as) > length bs)
+          then d_as
+          else d_as ++ thunk)
+         (if length (cap d_as) > length bs
+          && not (length (cap d_bs) > length as)
+          then d_bs
+          else d_bs ++ thunk)
