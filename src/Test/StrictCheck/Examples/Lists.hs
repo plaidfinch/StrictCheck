@@ -18,6 +18,11 @@ take' n (x : xs)
   | n > 0     = x : take' (n-1) xs
   | otherwise = []
 
+take_spec_too_easy :: Shaped a => Spec '[Int, [a]] [a]
+take_spec_too_easy =
+  Spec $ \predict d n xs ->
+    predict n xs
+
 take_spec :: Shaped a => Spec '[Int, [a]] [a]
 take_spec =
   Spec $ \predict d n xs ->
