@@ -117,13 +117,12 @@ entangleShape =
 observe1 :: (Shaped a, Shaped b, _)
          => (b -> ()) -> (a -> b) -> a -> (Demand b, Demand a)
 observe1 context function input =
-  runIdentity $ do
-    let (input',  inputD)  = entangleShape input
-        (result', resultD) = entangleShape (function input')
-    !_ <- eval (context result')
-    !_ <- eval (rnf inputD)
-    !_ <- eval (rnf resultD)
-    return (resultD, inputD)
+  let (input', inputD)  =
+        entangleShape input              -- (1)
+      (result', resultD) =
+        entangleShape (function input')  -- (2)
+  in let !_ = context result'            -- (3)
+  in (resultD, inputD)                   -- (4)
 
 observeNP :: (All Shaped inputs, Shaped result, _)
           => (result -> ())
@@ -132,18 +131,15 @@ observeNP :: (All Shaped inputs, Shaped result, _)
           -> ( Demand result
              , NP Demand inputs )
 observeNP context function inputs =
-  runIdentity $ do
-    let entangled =
-          hcliftA (Proxy :: Proxy Shaped)
-                  (uncurry Pair . first I . entangleShape . unI) inputs
-        (inputs', inputsD) =
-          (hliftA (\(Pair r _) -> r) entangled,
-           hliftA (\(Pair _ l) -> l) entangled)
-        (result', resultD) = entangleShape (function inputs')
-    !_ <- eval (context result')
-    !_ <- eval (rnf inputsD)
-    !_ <- eval (rnf resultD)
-    return (resultD, inputsD)
+  let entangled =
+        hcliftA (Proxy :: Proxy Shaped)
+                (uncurry Pair . first I . entangleShape . unI) inputs
+      (inputs', inputsD) =
+        (hliftA (\(Pair r _) -> r) entangled,
+          hliftA (\(Pair _ l) -> l) entangled)
+      (result', resultD) = entangleShape (function inputs')
+  in let !_ = context result'
+  in (resultD, inputsD)
 
 observe :: (All Shaped (Args function), Shaped (Result function), _)
         => (Result function -> ())
