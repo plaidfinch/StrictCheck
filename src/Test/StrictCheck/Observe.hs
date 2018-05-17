@@ -114,7 +114,7 @@ entangleShape =
   . separate (uncurry Pair . first I . entangle . unI)
   . (I %)
 
-observe1 :: (Shaped a, Shaped b, _)
+observe1 :: (Shaped a, Shaped b)
          => (b -> ()) -> (a -> b) -> a -> (Demand b, Demand a)
 observe1 context function input =
   let (input', inputD)  =
