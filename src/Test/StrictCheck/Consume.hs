@@ -1,11 +1,16 @@
 module Test.StrictCheck.Consume
-  ( Input
+  ( -- * Incrementally consuming input
+    Input
   , Inputs
   , Consume(..)
+  -- * Manually writing 'Consume' instances
   , constructor
   , normalize
   , consumeTrivial
   , consumePrimitive
+  -- * Generically deriving 'Consume' instances
+  , GConsume
+  , gConsume
   ) where
 
 import Test.QuickCheck
@@ -41,30 +46,34 @@ import Data.IntMap   as IntMap
 import Data.IntSet   as IntSet
 
 
--------------------------------------------------------
--- The user interface for creating Consume instances --
--------------------------------------------------------
-
--- | Generate a tree of all possible ways to destruct the input value.
+-- | Lazily monomorphize some input value, by converting it into an @Input@.
+-- This is an incremental version of QuickCheck's @CoArbitrary@ typeclass.
+-- It can also be seen as a generalization of the @NFData@ class.
 class Consume a where
+  -- | Convert an @a@ into an @Input@ by recursively destructing it using calls
+  -- to @consume@
   consume :: a -> Input
   default consume :: GConsume a => a -> Input
   consume = gConsume
 
--- | Reassemble pieces of input into a larger Input.
+-- | Reassemble pieces of input into a larger Input (to be called on the result
+-- of @consume@-ing subparts of input
 constructor :: Int -> [Input] -> Input
 constructor n !is =
   Input (Variant (variant n)) is
 
--- | Use the CoArbitrary instance for a type to consume it. This should only be
--- used for "flat" types, i.e. those which contain no interesting substructure.
+-- | Use the CoArbitrary instance for a type to consume it
+--
+-- This should only be used for "flat" types, i.e. those which contain no
+-- interesting consumable substructure, as it's fully strict (non-incremental)
 consumePrimitive :: CoArbitrary a => a -> Input
 consumePrimitive !a =
   Input (Variant (coarbitrary a)) []
 
--- | If a type has no observable properties or substructure which can be used
--- to drive the randomization of output, consumption should merely evaluate a
--- value to weak-head normal form.
+-- | Consume a type which has no observable structure whatsoever
+--
+-- This should only be used for types for which there is only one inhabitant, or
+-- for which inhabitants cannot be distinguished at all.
 consumeTrivial :: a -> Input
 consumeTrivial !_ =
   Input mempty []
@@ -79,13 +88,15 @@ normalize (consume -> input) = go input
 -- Deriving Consume instances generically --
 --------------------------------------------
 
+-- | The constraints necessary to generically @consume@ something
 type GConsume a = (Generic a, All2 Consume (Code a))
 
+-- | Generic 'consume'
 gConsume :: GConsume a => a -> Input
 gConsume !(from -> sop) =
   constructor (index_SOP sop)
   . hcollapse
-  . hcliftA (Proxy :: Proxy Consume) (K . consume . unI)
+  . hcliftA (Proxy @Consume) (K . consume . unI)
   $ sop
 
 

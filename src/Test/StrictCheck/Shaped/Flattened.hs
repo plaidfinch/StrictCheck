@@ -48,4 +48,4 @@ unflatten (Flattened u p) = u p
 mapFlattened :: forall c d f g xs. All c xs
   => (forall x. c x => f x -> g x) -> Flattened d f xs -> Flattened d g xs
 mapFlattened t (Flattened u p) =
-  Flattened u (hcliftA (Proxy :: Proxy c) t p)
+  Flattened u (hcliftA (Proxy @c) t p)

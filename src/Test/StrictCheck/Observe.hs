@@ -130,8 +130,10 @@ observeNP :: (All Shaped inputs, Shaped result, _)
              , NP Demand inputs )
 observeNP context function inputs =
   let entangled =
-        hcliftA (Proxy :: Proxy Shaped)
-                (uncurry Pair . first I . entangleShape . unI) inputs
+        hcliftA
+          (Proxy @Shaped)
+          (uncurry Pair . first I . entangleShape . unI)
+          inputs
       (inputs', inputsD) =
         (hliftA (\(Pair r _) -> r) entangled,
           hliftA (\(Pair _ l) -> l) entangled)
@@ -182,7 +184,7 @@ evaluate demand value =
         \(Flattened _ fieldsD) -> maybe () $
         \(Flattened _ fieldsV) ->
             rnf . hcollapse $
-              hcliftA2 (Proxy :: Proxy Shaped) ((K .) . go) fieldsD fieldsV
+              hcliftA2 (Proxy @Shaped) ((K .) . go) fieldsD fieldsV
 
 
 -----------------------------
@@ -259,5 +261,5 @@ eqDemand (E d1) (E d2) =
     \(Flattened _ flatD1) -> maybe False $
     \(Flattened _ flatD2) ->
       all id . hcollapse $
-        hcliftA2 (Proxy :: Proxy Shaped)
+        hcliftA2 (Proxy @Shaped)
           ((K .) . eqDemand) flatD1 flatD2

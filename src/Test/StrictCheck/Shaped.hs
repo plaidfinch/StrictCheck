@@ -1,18 +1,17 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# language PartialTypeSignatures #-}
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
-{-| This module defines the 'Shaped' typeclass, which is used to reify
-    substructures (prefixes) of values, and to generically observe their
-    evaluation.
+{-| This module defines the 'Shaped' typeclass, which is used to generically
+    manipulate values as fixed-points of higher-order functors in order to
+    analyze their structure, e.g. while observing evaluation.
 
-    If the functions you care about operate over datatypes which are all
-    either 1) instances of 'Shaped' or 2) instances of GHC's 'GHC.Generic',
-    testing these functions does not require you to work directly with the
-    'Shaped' typeclass.
+    If you just care about testing the strictness of functions over datatypes
+    which are already instances of @Shaped@, you don't need to use this module.
 
-    To define new instances of 'Shaped' for types which implement 'GHC.Generic',
-    an empty instance will suffice, as all the methods of 'Shaped' can be filled
-    in by generic implementations. For example:
+    __Important note:__ To define new instances of 'Shaped' for types which
+    implement 'GHC.Generic', __an empty instance will suffice__, as all the
+    methods of 'Shaped' can be filled in by generic implementations. For
+    example:
 
     > import GHC.Generics as GHC
     > import Generics.SOP as SOP
@@ -31,13 +30,21 @@
     Manual instances of 'Shaped' are necessary for types which do not or cannot
     implement GHC's @Generic@ typeclass, such as existential types, abstract
     types, and GADTs.
+
+    This module is heavily based upon the approach in "Data.Functor.Foldable",
+    which in turn is modeled after the paper "Functional Programming with
+    Bananas, Lenses, Envelopes and Barbed Wire" (1991) by Erik Meijer, Maarten
+    Fokkinga and Ross Paterson. If you don't yet understand recursion schemes
+    and want to understand this module, it's probably a good idea to familiarize
+    yourself with "Data.Functor.Foldable" before diving into this higher-order
+    generalization.
 -}
 module Test.StrictCheck.Shaped
   ( Shaped(..)
   -- * Fixed-points of 'Shape's
   , type (%)(..)
+  -- * Folds and unfolds over fixed-points of @Shape@s
   , unwrap
-  -- * Folds and unfolds over fixed-points of 'Shape's
   , interleave
   , (%)
   , fuse
@@ -74,23 +81,31 @@ import Test.StrictCheck.Shaped.Flattened
 
 -- TODO: provide instances for all of Base
 
+-- | When a type @a@ is @Shaped@, we know how to convert it into a
+-- representation parameterized by an arbitrary functor @f@, so that @Shape a f@
+-- (the "shape of @a@ parameterized by @f@") is structurally identical to the
+-- topmost structure of @a@, but with @f@ wrapped around any subfields of @a@.
+--
+-- Note that this is /not/ a recursive representation! The functor @f@ in
+-- question wraps the original type of the field and /not/ a @Shape@ of that
+-- field.
+--
+-- For instance, the @Shape@ of @Either a b@ might be:
+--
+-- > data EitherShape a b f
+-- >   = LeftShape  (f a)
+-- >   | RightShape (f b)
+-- >
+-- > instance Shaped (Either a b) where
+-- >   type Shape (Either a b) = EitherShape a b
+-- >   ...
+--
+-- The shape of a primitive type should be isomorphic to the primitive type,
+-- with the functor parameter left unused.
 class Typeable a => Shaped (a :: *) where
   -- | The @Shape@ of an @a@ is a type isomorphic to the outermost level of
   -- structure in an @a@, parameterized by the functor @f@, which is wrapped
   -- around any fields (of any type) in the original @a@.
-  --
-  -- For instance, the @Shape@ of @Either a b@ might be:
-  --
-  -- > data EitherShape a b f
-  -- >   = LeftShape  (f a)
-  -- >   | RightShape (f b)
-  -- >
-  -- > instance Shaped (Either a b) where
-  -- >   type Shape (Either a b) = EitherShape a b
-  -- >   ...
-  --
-  -- The shape of a primitive type should be isomorphic to the primitive type,
-  -- with the functor parameter left unused.
   type Shape a :: (* -> *) -> *
   type Shape a = GShape a
 
@@ -174,9 +189,8 @@ class Typeable a => Shaped (a :: *) where
   render = gRender
 
 
--------------------------------------
--- Manipulating interleaved Shapes --
--------------------------------------
+
+-- * Fixed-points of 'Shape's
 
 -- | A value of type @f % a@ has the same structure as an @a@, but with the
 -- structure of the functor @f@ interleaved at every field (including ones of
@@ -188,6 +202,10 @@ newtype (f :: * -> *) % (a :: *) :: * where
 -- constructor.
 unwrap :: f % a -> f (Shape a ((%) f))
 unwrap (Wrap fs) = fs
+
+
+
+-- * Folds and unfolds over fixed-points of @Shape@s
 
 -- | Map a function across all the fields in a 'Shape'
 --
@@ -336,9 +354,14 @@ deriving instance Show (f (RenderLevel (Rendered f))) => Show (Rendered f)
 -- Generic implementation of the Shaped methods --
 ---------------------------------------------------
 
+-- | The 'Shape' used for generic implementations of 'Shaped'
+--
+-- This wraps a sum-of-products representation from "Generics.SOP".
 newtype GShape a f =
   GS (NS (NP f) (Code a))
 
+-- | The collection of constraints necessary for a type to be given a generic
+-- implementation of the 'Shaped' methods
 type GShaped a =
   ( Generic a
   , Shape a ~ GShape a
@@ -346,18 +369,21 @@ type GShaped a =
   , SListI (Code a)
   , All SListI (Code a) )
 
+-- | Generic 'project'
 gProject :: GShaped a
          => (forall x. Shaped x => x -> f x)
          -> a -> Shape a f
 gProject p !(from -> sop) =
-  GS (unSOP (hcliftA (Proxy :: Proxy Shaped) (p . unI) sop))
+  GS (unSOP (hcliftA (Proxy @Shaped) (p . unI) sop))
 
+-- | Generic 'embed'
 gEmbed :: GShaped a
        => (forall x. Shaped x => f x -> x)
        -> Shape a f -> a
 gEmbed e !(GS d) =
-  to (hcliftA (Proxy :: Proxy Shaped) (I . e) (SOP d))
+  to (hcliftA (Proxy @Shaped) (I . e) (SOP d))
 
+-- | Generic 'match'
 gMatch :: forall a f g result. GShaped a
        => Shape a f -> Shape a g
        -> (forall xs. All Shaped xs
@@ -408,6 +434,7 @@ gMatch !(GS df) !(GS dg) cont =
     flatGD (Flattened un fields) =
       Flattened (GS . coerce . un) fields
 
+-- | Generic 'render'
 gRender :: forall a x. (HasDatatypeInfo a, GShaped a)
          => Shape a (K x) -> RenderLevel x
 gRender (GS demand) =
@@ -417,7 +444,7 @@ gRender (GS demand) =
     Newtype m d c ->
       renderC m d demand (c :* Nil)
   where
-    info = datatypeInfo (Proxy :: Proxy a)
+    info = datatypeInfo (Proxy @a)
 
     renderC :: forall as. ModuleName -> DatatypeName
             -> NS (NP (K x)) as

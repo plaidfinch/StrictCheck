@@ -1,9 +1,21 @@
+{-| __Internal module__: This module does not make any stability guarantees, and
+    may not adhere to the PVP.
+
+    This module implements the rose-tree data structure used by StrictCheck to
+    monomorphize inputs to functions. We decouple the consumption of input from
+    the production of output by converting any input to an @Input@: a lazily
+    constructed rose tree with nodes each containing a @(Gen a -> Gen a)@ which
+    captures a random perturbation associated with the shape of the value
+    consumed. The tree-shape of an @Input@ matches that of the entire consumed
+    value, and evaluating any subpart of it forces the evaluation of the
+    corresponding part of the original value.
+-}
 module Test.StrictCheck.Internal.Inputs
   ( Variant(..)
   , Input(..)
   , Inputs(..)
   , draw
-  , getInputs
+  , destruct
   ) where
 
 import Test.QuickCheck (Gen)
@@ -26,18 +38,21 @@ instance Monoid Variant where
   mempty = Variant id
 
 -- | A tree representing all possible destruction sequences for a value
--- Unfolding the contained urns forces a particular random control path
+-- Unfolding the contained lists forces a particular random control path
 -- for destructing the datatype.
-data Input =
-  Input Variant [Input]
+data Input
+  = Input Variant [Input]  -- ^ Not exposed in safe API
 
 -- | A list of inputs given to a function, in abstract form. This lazy structure
 -- is evaluated piecewise during the course of producing a function, thus
 -- triggering the partial evaluation of the original input to the function.
-newtype Inputs = Inputs [Input]
+newtype Inputs
+  = Inputs [Input]  -- ^ Not exposed in safe API
 
-getInputs :: Inputs -> [Input]
-getInputs (Inputs is) = is
+-- | Extract the list of @Input@s from an @Inputs@
+destruct :: Inputs -> [Input]
+destruct (Inputs is) = is
 
+-- | Extract the entropy and subfield-@Input@s from a given @Input@
 draw :: Input -> (Variant, [Input])
 draw (Input v is) = (v, is)

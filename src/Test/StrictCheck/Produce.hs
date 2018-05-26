@@ -37,7 +37,7 @@ class Produce b where
   produce :: (?inputs::Inputs) => Gen b
 
 theInputs :: (?inputs::Inputs) => [Input]
-theInputs = getInputs ?inputs
+theInputs = destruct ?inputs
 
 -- | Given an input-consuming producer, wrap it in an outer layer of input
 -- consumption, so that this consumption can be interleaved when the producer is
@@ -69,7 +69,10 @@ instance (Consume a, Produce b) => Produce (a -> b) where
 
 -- | Create an input-consuming producer of input-consuming functions, given an
 -- input-consuming producer for results of that function.
-returning :: (Consume a, ?inputs::Inputs) => ((?inputs::Inputs) => Gen b) -> Gen (a -> b)
+returning
+  :: (Consume a, ?inputs::Inputs)
+  => ((?inputs::Inputs) => Gen b)
+  -> Gen (a -> b)
 returning out =
   promote $ \a ->
     let ?inputs = Inputs (consume a : theInputs)
@@ -79,13 +82,15 @@ returning out =
 -- arity. This will usually be used in conjuntion with type application, to
 -- specify the type(s) of the argument(s) to the function.
 variadic ::
-  forall args result. (All Consume args, Curry args, SListI args, ?inputs::Inputs)
-         => ((?inputs::Inputs) => Gen result) -> Gen (args ⋯-> result)
+  forall args result.
+  (All Consume args, Curry args, SListI args, ?inputs::Inputs)
+  => ((?inputs::Inputs) => Gen result)
+  -> Gen (args ⋯-> result)
 variadic out =
   fmap (curryAll @args @_ @(NP I)) . promote $ \args ->
     let ?inputs =
           Inputs . (++ theInputs) $
-            hcollapse $ hcliftA (Proxy :: Proxy Consume) (K . consume . unI) args
+            hcollapse $ hcliftA (Proxy @Consume) (K . consume . unI) args
     in build out
 
 
