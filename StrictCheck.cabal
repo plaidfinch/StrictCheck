@@ -1,14 +1,14 @@
 name:                StrictCheck
-version:             0.1.0.0
+version:             0.2.1
 -- synopsis:
 -- description:
-homepage:            https://github.com/githubuser/StrictCheck#readme
-license:             BSD3
+homepage:            https://github.com/kwf/StrictCheck#readme
+license:             MIT
 license-file:        LICENSE
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2017 Author name here
-category:            Web
+author:              Kenneth Foner, Hengchu Zhang, and Leo Lampropoulos
+maintainer:          kwf@very.science
+copyright:           (c) 2018 Kenneth Foner
+category:            Testing
 build-type:          Simple
 cabal-version:       >=1.10
 extra-source-files:  README.md
@@ -17,20 +17,17 @@ library
   hs-source-dirs:      src
   default-language:    Haskell2010
   build-depends:       base >= 4.7 && < 5,
-                       spoon >= 0.3.1,
-                       deepseq >= 1.4,
-                       contravariant >= 1.4,
-                       mtl >= 2.2.1,
-                       transformers >= 0.5,
-                       QuickCheck,
-                       data-fix,
-                       extra >= 1.6,
-                       monad-loops >= 0.4.3,
-                       containers >= 0.5.10,
-                       generics-sop >= 0.3.2.0,
-                       constraints >= 0.10,
-                       bifunctors >= 5.5,
-                       template-haskell >= 2.12.0.0
+                       deepseq          >= 1.4   && < 1.5,
+                       contravariant    >= 1.4   && < 1.5,
+                       mtl              >= 2.2   && < 2.3,
+                       transformers     >= 0.5   && < 0.6,
+                       QuickCheck       >= 2.10  && < 2.11,
+                       extra            >= 1.6   && < 1.7,
+                       containers       >= 0.5   && < 0.6,
+                       generics-sop     >= 0.3.2 && < 0.4,
+                       constraints      >= 0.10  && < 0.11,
+                       bifunctors       >= 5.5   && < 5.6,
+                       template-haskell >= 2.12  && < 2.13
   exposed-modules:     Test.StrictCheck
                        Test.StrictCheck.Curry,
                        Test.StrictCheck.Consume,
@@ -45,20 +42,16 @@ library
                        Test.StrictCheck.TH,
                        Test.StrictCheck.Examples.Lists,
                        Test.StrictCheck.Examples.Map
-                       -- Test.StrictCheck.Scratch.Observe,
-                       -- Test.StrictCheck.Scratch.LazyCoArbitrary,
-                       -- Test.StrictCheck.Scratch.Nats
-  default-extensions:   DataKinds, GADTs, BangPatterns, TypeFamilies, RankNTypes,
-                        AllowAmbiguousTypes, UndecidableInstances,
-                        DefaultSignatures, TypeApplications, ScopedTypeVariables,
-                        FlexibleContexts, ConstraintKinds, DeriveFunctor,
-                        FlexibleInstances, StandaloneDeriving, DeriveGeneric,
-                        DeriveAnyClass, TypeOperators, PolyKinds, LambdaCase,
-                        TupleSections, TypeFamilyDependencies,
-                        MultiParamTypeClasses, DerivingStrategies,
-                        GeneralizedNewtypeDeriving, ViewPatterns, ImplicitParams,
-                        NamedFieldPuns, PatternSynonyms
--- Do something about type defaults?
+  default-extensions:  DataKinds, GADTs, BangPatterns, TypeFamilies, RankNTypes,
+                       AllowAmbiguousTypes, UndecidableInstances,
+                       DefaultSignatures, TypeApplications, ScopedTypeVariables,
+                       FlexibleContexts, ConstraintKinds, DeriveFunctor,
+                       FlexibleInstances, StandaloneDeriving, DeriveGeneric,
+                       DeriveAnyClass, TypeOperators, PolyKinds, LambdaCase,
+                       TupleSections, TypeFamilyDependencies,
+                       MultiParamTypeClasses, DerivingStrategies,
+                       GeneralizedNewtypeDeriving, ViewPatterns, ImplicitParams,
+                       NamedFieldPuns, PatternSynonyms
   ghc-options:         -Wall -fno-warn-unticked-promoted-constructors
 
 test-suite test-strictcheck
