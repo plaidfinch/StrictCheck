@@ -324,6 +324,11 @@ renderfold = unK . intrafold oneLevel
 -- > type DatatypeName = String
 type QName = (ModuleName, DatatypeName, String)
 
+-- | @RenderLevel@ is a functor whose outer shape contains all the information
+-- about how to pretty-format the outermost @Shape@ of some value. We use
+-- parametricity to make it difficult to construct incorrect 'render' methods,
+-- by asking the user merely to produce a single @RenderLevel@ and stitching
+-- nested @RenderLevel@s into complete 'Rendered' trees.
 data RenderLevel x
   = ConstructorD QName [x]
   -- ^ A prefix constructor, and a list of its fields

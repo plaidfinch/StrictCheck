@@ -1,13 +1,30 @@
+{-| This module defines the 'Produce' typeclass, used for generating random
+    values for testing in StrictCheck.
+
+    'Produce' is a strict generalization of "Test.QuickCheck"'s 'Arbitrary'
+    typeclass. Paired with 'Consume' (a generalization of 'CoArbitrary') it can
+    be used to create random non-strict functions, whose strictness behavior is
+    dependent on the values given to them.
+-}
+
 module Test.StrictCheck.Produce
   ( Produce(..)
+  -- * Tools for writing 'Produce' instances
   , recur
   , build
+  -- * Producing non-strict functions
   , returning
   , variadic
+  -- * Integration with "Test.QuickCheck"'s @Arbitrary@
   , Lazy(..)
   , freely
+  -- * Abstract types representing input to a function
   , Input
   , Inputs
+  -- * Useful random distributions for processing @Input@s
+  , geometric
+  , pick
+  , draws
   ) where
 
 import Test.QuickCheck
@@ -31,8 +48,31 @@ import qualified Data.List.NonEmpty as NE
 
 -- TODO: parameterize over destruction pattern?
 
--- | Produce an arbitrary construction, but using Inputs to drive the
--- implicit destruction of the original input value.
+-- | Produce an arbitrary value of type @b@, such that destructing that value
+-- incrementally evaluates some input to a function.
+--
+-- Writing instances of @Produce@ is very similar to writing instances of
+-- QuickCheck's 'Arbitrary'. The distinction: when making a recursive call to
+-- produce a subfield of a structure, __always__ use 'build' or 'recur', and
+-- __never__ a direct call to 'produce' itself. This ensures that the input can
+-- potentially be demanded at any step of evaluation of the produced value.
+--
+-- If, in the course of generating a value of type @b@, you need to generate a
+-- random value of some other type, which is /not/ going to be a subpart of the
+-- resultant @b@ (e.g. a length or depth), use a direct call to @arbitrary@ or
+-- some other generator which does not consume input.
+--
+-- An example instance of @Produce@:
+--
+-- > data D a
+-- >   = X a
+-- >   | Y [Int]
+-- >
+-- > instance Produce a => Produce (D a) where
+-- >   produce =
+-- >     oneof [ fmap X recur
+-- >           , fmap Y recur
+-- >           ]
 class Produce b where
   produce :: (?inputs::Inputs) => Gen b
 
@@ -98,9 +138,12 @@ variadic out =
 -- Random destruction of the original input, as transformed into Input --
 -------------------------------------------------------------------------
 
+-- | Sample a discrete geometric distribution with expectation 1
 geometric :: (Enum a, Num a) => Gen a
-geometric = oneof [return 0, succ <$> geometric]
+geometric =
+  oneof [return 0, succ <$> geometric]
 
+-- | Uniformly choose an element of a non-empty list, returning the remainder
 pick :: NonEmpty a -> Gen (a, [a])
 pick as = do
   index <- choose (0, NE.length as - 1)
@@ -109,6 +152,15 @@ pick as = do
     pickAt 0 (x :| xs) = (x, xs)
     pickAt n (x :| xs) = (x :) <$> pickAt (n - 1) (NE.fromList xs)
 
+-- | Destruct a random subpart of the given 'Input's, returning the 'Variant'
+-- corresponding to the combined information harvested during this process, and
+-- the remaining "leaves" of the inputs yet to be destructed
+--
+-- To maximize the likelihood that different random consumption paths through
+-- the same value will diverge (desirable when generating functions with
+-- interesting strictness), @draws@ destructs the forest of @Input@s as a
+-- depth-first random traversal with a budget sampled from a geometric
+-- distribution with expectation 1.
 draws :: [Input] -> Gen (Variant, [Input])
 draws inputs = do
   second concat <$> (downward [inputs] =<< geometric)
@@ -137,7 +189,8 @@ draws inputs = do
 
 -- | We hook into QuickCheck's existing Arbitrary infrastructure by using
 -- a newtype to differentiate our special way of generating things.
-newtype Lazy a = Lazy { runLazy :: a }
+newtype Lazy a
+  = Lazy { runLazy :: a }
 
 instance Produce a => Arbitrary (Lazy a) where
   arbitrary = Lazy <$> freely produce

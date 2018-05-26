@@ -7,7 +7,7 @@
     understand this in order to use StrictCheck, unless you need to declare
     custom instances of @Shaped@ for a type not supported by StrictCheck's
     generics mechanism (i.e. GADTs, existential types, abstract types).
-|-}
+-}
 
 module Test.StrictCheck.Shaped.Flattened where
 

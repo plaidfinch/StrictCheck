@@ -1,3 +1,12 @@
+{-| This module defines the 'Consume' typeclass, used for incrementally
+    destructing inputs to random non-strict functions.
+
+    Calling 'consume' on some value lazily returns an abstract type of 'Input',
+    which contains all the entropy present in the original value. Paired with
+    'Test.StrictCheck.Produce', these @Input@ values can be used to generate
+    random non-strict functions, whose strictness behavior is dependent on the
+    values given to them.
+-}
 module Test.StrictCheck.Consume
   ( -- * Incrementally consuming input
     Input
@@ -49,6 +58,27 @@ import Data.IntSet   as IntSet
 -- | Lazily monomorphize some input value, by converting it into an @Input@.
 -- This is an incremental version of QuickCheck's @CoArbitrary@ typeclass.
 -- It can also be seen as a generalization of the @NFData@ class.
+--
+-- Instances of @Consume@ can be derived automatically for any type implementing
+-- the @Generic@ class from "GHC.Generics". Using the @DeriveAnyClass@
+-- extension, we can say:
+--
+-- > import GHC.Generics as GHC
+-- > import Generics.SOP as SOP
+-- >
+-- > data D x y
+-- >   = A
+-- >   | B (x, y)
+-- >   deriving (GHC.Generic, SOP.Generic, Consume)
+--
+-- This automatic derivation follows these rules, which you can follow too if
+-- you're manually writing an instance for some type which is not @Generic@:
+--
+-- For each distinct constructor, make a single call to 'constructor' with
+-- a distinct @Int@, and a list of @Input@s, each created by recursively calling
+-- 'consume' on every field in that constructor. For abstract types (e.g. sets),
+-- the same procedure can be used upon an extracted list representation of the
+-- contents.
 class Consume a where
   -- | Convert an @a@ into an @Input@ by recursively destructing it using calls
   -- to @consume@
@@ -56,8 +86,8 @@ class Consume a where
   default consume :: GConsume a => a -> Input
   consume = gConsume
 
--- | Reassemble pieces of input into a larger Input (to be called on the result
--- of @consume@-ing subparts of input
+-- | Reassemble pieces of input into a larger Input: this is to be called on the
+-- result of @consume@-ing subparts of input
 constructor :: Int -> [Input] -> Input
 constructor n !is =
   Input (Variant (variant n)) is
