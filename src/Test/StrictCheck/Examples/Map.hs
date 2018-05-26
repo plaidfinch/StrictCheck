@@ -10,16 +10,11 @@ import Generics.SOP (Generic, HasDatatypeInfo, NS(..), hd, tl)
 
 import Test.StrictCheck
 import Test.StrictCheck.TH
-import Test.StrictCheck.Observe
 import Control.DeepSeq
 
 import Data.Maybe
 import Data.Function
 
-import Test.QuickCheck
-import Test.QuickCheck.Modifiers
-
-import Control.Applicative
 
 data Map k v = Bin (Map k v) k v (Map k v)
              | Empty
@@ -27,7 +22,7 @@ data Map k v = Bin (Map k v) k v (Map k v)
              deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped, NFData)
 
 type KMap = Map (Int, Int) Int
-  
+
 $(derivePatternSynonyms ''Map)
 
 replaceThunk :: (Shaped k, Shaped v) => Map k v -> Map k v -> Map k v
@@ -56,7 +51,7 @@ keys (Bin ml k _ mr) = keys ml ++ [k] ++ keys mr
 
 (!) :: KMap -> (Int, Int) -> Int
 (!) m k = case lookup m k of
-            Nothing -> 0 
+            Nothing -> 0
             Just v  -> v
 
 weights :: [Int]

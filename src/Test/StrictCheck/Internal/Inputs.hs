@@ -6,7 +6,8 @@ module Test.StrictCheck.Internal.Inputs
   , getInputs
   ) where
 
-import Test.QuickCheck
+import Test.QuickCheck (Gen)
+import Data.Semigroup
 
 --------------------------------------------------
 -- The core user-facing types: Input and Inputs --
@@ -16,6 +17,9 @@ import Test.QuickCheck
 -- around lack of impredicativity.
 newtype Variant =
   Variant { vary :: forall a. Gen a -> Gen a }
+
+instance Semigroup Variant where
+  (<>) = mappend
 
 instance Monoid Variant where
   v `mappend` w = Variant $ vary v . vary w

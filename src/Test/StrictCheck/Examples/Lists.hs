@@ -3,9 +3,6 @@ module Test.StrictCheck.Examples.Lists where
 import Test.StrictCheck
 import Control.DeepSeq
 import Data.Functor
--- import Data.List
-
-import Debug.Trace
 
 length_spec :: Shaped a => Spec '[[a]] Int
 length_spec =
@@ -20,7 +17,7 @@ take' n (x : xs)
 
 take_spec_too_easy :: Shaped a => Spec '[Int, [a]] [a]
 take_spec_too_easy =
-  Spec $ \predict d n xs ->
+  Spec $ \predict _d n xs ->
     predict n xs
 
 take_spec :: Shaped a => Spec '[Int, [a]] [a]

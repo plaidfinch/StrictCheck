@@ -26,8 +26,6 @@ import Test.StrictCheck.Shaped.Flattened
 -- The basic types which make up a demand description --
 --------------------------------------------------------
 
--- TODO: rename Thunk constructors to allow patsyns to use these names
-
 data Thunk a = Eval !a | Thunk
   deriving (Eq, Ord, Show, Functor, GHC.Generic, NFData)
 
@@ -193,21 +191,21 @@ evaluate demand value =
 
 showPrettyFieldThunkS
   :: Bool -> String -> Int -> Rendered Thunk -> String -> String
-showPrettyFieldThunkS _            thunk _    (RWrap Thunk)      = (thunk ++)
-showPrettyFieldThunkS qualifyNames thunk prec (RWrap (Eval pd)) =
+showPrettyFieldThunkS _            t _    (RWrap Thunk)      = (t ++)
+showPrettyFieldThunkS qualifyNames t prec (RWrap (Eval pd)) =
   case pd of
     ConstructorD name fields ->
       showParen (prec > 10 && length fields > 0) $
         showString (qualify name)
         . flip foldMapCompose fields
-          (((' ' :) .) . showPrettyFieldThunkS qualifyNames thunk 11)
+          (((' ' :) .) . showPrettyFieldThunkS qualifyNames t 11)
     RecordD name recfields ->
       showParen (prec > 10) $
         showString (qualify name)
         . flip foldMapCompose recfields
           (\(fName, x) ->
              ((((" " ++ qualify fName ++ " = ") ++) .) $
-             showPrettyFieldThunkS qualifyNames thunk 11 x))
+             showPrettyFieldThunkS qualifyNames t 11 x))
     InfixD name assoc fixity l r ->
       showParen (prec > fixity) $
         let (lprec, rprec) =
@@ -215,15 +213,15 @@ showPrettyFieldThunkS qualifyNames thunk prec (RWrap (Eval pd)) =
                 LeftAssociative  -> (fixity,     fixity + 1)
                 RightAssociative -> (fixity + 1, fixity)
                 NotAssociative   -> (fixity + 1, fixity + 1)
-        in showPrettyFieldThunkS qualifyNames thunk lprec l
+        in showPrettyFieldThunkS qualifyNames t lprec l
          . showString (" " ++ qualify name ++ " ")
-         . showPrettyFieldThunkS qualifyNames thunk rprec r
+         . showPrettyFieldThunkS qualifyNames t rprec r
     CustomD fixity list ->
       showParen (prec > fixity) $
         foldr (.) id $ flip fmap list $
           extractEither
           . bimap (showString . qualifyEither)
-                  (\(f, pf) -> showPrettyFieldThunkS qualifyNames thunk f pf)
+                  (\(f, pf) -> showPrettyFieldThunkS qualifyNames t f pf)
   where
     qualify (m, _, n) =
       if qualifyNames then (m ++ "." ++ n) else n

@@ -2,13 +2,7 @@
 {-# OPTIONS_GHC -fno-warn-dodgy-exports -fno-warn-unused-imports #-}
 
 module Test.StrictCheck
-  ( module Curry
-  , module Test.StrictCheck.Shaped
-  , module Test.StrictCheck.Produce
-  , module Test.StrictCheck.Consume
-  , module Test.StrictCheck.Observe
-  , module Test.StrictCheck.Instances
-  , module Test.StrictCheck.Demands
+  ( module Exported
 
   , NP(..), I(..)
 
@@ -21,6 +15,7 @@ module Test.StrictCheck
   , shrinkViaArbitrary
   , genViaProduce
   , strictnessViaSized
+  , Demands
   , Spec(..)
   , Evaluation(..)
   )
@@ -28,19 +23,19 @@ module Test.StrictCheck
 
 
 import Test.StrictCheck.Curry as Curry
-import Test.StrictCheck.Produce
-import Test.StrictCheck.Consume
-import Test.StrictCheck.Observe
-import Test.StrictCheck.Instances
-import Test.StrictCheck.Demands
-import Test.StrictCheck.Shaped
-import Test.StrictCheck.Shaped.Flattened
+import Test.StrictCheck.Produce          as Exported
+import Test.StrictCheck.Consume          as Exported
+import Test.StrictCheck.Observe          as Exported
+import Test.StrictCheck.Instances        as Exported
+import Test.StrictCheck.Demands          as Exported
+import Test.StrictCheck.Shaped           as Exported
+import Test.StrictCheck.Shaped.Flattened as Exported
 
 import Generics.SOP hiding (Shape)
 import Generics.SOP.NP
 import qualified GHC.Generics as GHC
 
-import Test.QuickCheck hiding (Args, Result, function)
+import Test.QuickCheck as Exported hiding (Args, Result, function)
 import qualified Test.QuickCheck as QC
 
 import Data.List
@@ -69,11 +64,9 @@ strictnessViaSized = choose . (1,) =<< getSize
 newtype DemandComparison a =
   DemandComparison (Demand a -> Demand a -> Bool)
 
-type family Map f args where
-  Map f '[       ] = '[]
-  Map f (a : args) = f a : Map f args
-
-type Demands args = Map Demand args
+type family Demands args where
+  Demands '[       ] = '[]
+  Demands (a : args) = Demand a : Demands args
 
 newtype Spec args result =
   Spec (forall r. (args ⋯-> r)
@@ -117,7 +110,8 @@ compareToSpecWith comparisons spec (Evaluation inputs inputsD resultD) =
 
 equalToSpec
   :: forall args result.
-  (SListI args, All Shaped args, Curry args, Curry (Demands args), Shaped result)
+  ( SListI args, All Shaped args, Shaped result
+  , Curry args, Curry (Demands args) )
   => Spec args result
   -> Evaluation args result
   -> Maybe (NP Demand args)
@@ -309,9 +303,11 @@ displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
 ------------------------------------------------------------
 
 data Evaluation args result =
-  Evaluation (NP I      args)    -- ^ Inputs to a function
-             (NP Demand args)    -- ^ Demands on the input
-             (PosDemand result)  -- ^ Demand on the result
+  Evaluation
+    { inputs       :: NP I      args    -- ^ Inputs to a function
+    , inputDemands :: NP Demand args    -- ^ Demands on the input
+    , resultDemand :: PosDemand result  -- ^ Demand on the result
+    }
 
 instance (All Typeable args, Typeable result)
   => Show (Evaluation args result) where
@@ -326,7 +322,7 @@ instance (All Typeable args, Typeable result)
         $ hliftA (K . show)
         $ (hcpure (Proxy :: Proxy Typeable) typeRep :: NP TypeRep args)
 
--- TODO: Do not export this constructor!
+-- TODO: Do not export this constructor?
 
 
 -----------------------------------
@@ -402,7 +398,10 @@ shrinkEvalWith
         shrinkingInputs = mapMaybe (flip reObserve resultD) shrunkInputs
     in fairInterleave [ shrinkingDemand, shrinkingInputs ]
   where
-    reObserve :: NP I (Args f) -> PosDemand (Result f) -> Maybe (Evaluation (Args f) (Result f))
+    reObserve
+      :: NP I (Args f)
+      -> PosDemand (Result f)
+      -> Maybe (Evaluation (Args f) (Result f))
     reObserve is rD =
       let (rD', isD) = observeNP (evaluate rD) function is
       in fmap (Evaluation is isD) $

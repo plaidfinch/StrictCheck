@@ -2,7 +2,7 @@
 
 module Test.StrictCheck.TH where
 
-import Generics.SOP (NP(..), NS(..), SOP(..), I(..), Rep)
+import Generics.SOP (NP(..), NS(..))
 import Test.StrictCheck.Observe (Thunk(..), Demand)
 import Test.StrictCheck.Shaped
 
