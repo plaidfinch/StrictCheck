@@ -27,7 +27,6 @@ import Test.StrictCheck.Produce          as Exported
 import Test.StrictCheck.Consume          as Exported
 import Test.StrictCheck.Observe          as Exported
 import Test.StrictCheck.Instances        as Exported
-import Test.StrictCheck.Demands          as Exported
 import Test.StrictCheck.Shaped           as Exported
 import Test.StrictCheck.Shaped.Flattened as Exported
 
