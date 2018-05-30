@@ -3,9 +3,7 @@
 
 module Test.StrictCheck
   ( module Exported
-
   , NP(..), I(..)
-
   , strictCheckSpecExact
   , strictCheckWithResults
   , compareToSpecWith
@@ -38,7 +36,6 @@ import Test.QuickCheck as Exported hiding (Args, Result, function)
 import qualified Test.QuickCheck as QC
 
 import Data.List
-import Control.DeepSeq
 import Data.Functor.Product
 import Data.Maybe
 import Data.Coerce
@@ -85,7 +82,7 @@ curryCollect k = Curry.curry @xs k
 
 compareToSpecWith
   :: forall args result.
-  (SListI args, All Shaped args, Curry args, Curry (Demands args), Shaped result)
+  (All Shaped args, Curry args, Shaped result)
   => NP DemandComparison args
   -> Spec args result
   -> Evaluation args result
@@ -109,8 +106,7 @@ compareToSpecWith comparisons spec (Evaluation inputs inputsD resultD) =
 
 equalToSpec
   :: forall args result.
-  ( SListI args, All Shaped args, Shaped result
-  , Curry args, Curry (Demands args) )
+  (All Shaped args, Shaped result, Curry args)
   => Spec args result
   -> Evaluation args result
   -> Maybe (NP Demand args)
@@ -125,10 +121,8 @@ type StrictCheck function =
   , Consume (Result function)
   , Curry (Args function)
   , Curry (Demands (Args function))
-  , NFData (Shape (Result function) Demand)
   , All Typeable (Args function)
-  , All Shaped (Args function)
-  , All (Compose NFData Demand) (Args function))
+  , All Shaped (Args function) )
 
 -- TODO: CPS n-ary products out of the interface?
 
@@ -191,7 +185,7 @@ strictCheckSpecExact spec function =
 
 displayCounterSpec
   :: forall args result.
-  (Shaped result, All Shaped args, SListI args)
+  (Shaped result, All Shaped args)
   => (Evaluation args result, NP Demand args) -> String
 displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
   beside inputBox ("   " : "───" : repeat "   ") resultBox
@@ -334,8 +328,6 @@ evaluationForall
   , Consume (Result f)
   , Shaped (Result f)
   , All Shaped (Args f)
-  , NFData (Shape (Result f) Demand)
-  , All (Compose NFData Demand) (Args f)
   ) => NP Gen (Args f)
     -> Gen Strictness
     -> f
@@ -383,8 +375,6 @@ shrinkEvalWith
   ( Curry (Args f)
   , Shaped (Result f)
   , All Shaped (Args f)
-  , All (Compose NFData Demand) (Args f)
-  , NFData (Shape (Result f) Demand)
   ) => NP Shrink (Args f)
     -> f
     -> Evaluation (Args f) (Result f)
@@ -402,7 +392,7 @@ shrinkEvalWith
       -> PosDemand (Result f)
       -> Maybe (Evaluation (Args f) (Result f))
     reObserve is rD =
-      let (rD', isD) = observeNP (evaluate rD) function is
+      let (rD', isD) = observeNP (evaluateDemand rD) function is
       in fmap (Evaluation is isD) $
            case rD' of
              T     -> Nothing
@@ -488,7 +478,7 @@ binary n = N (binary (n - 1)) (binary (n - 1))
 
 data D = C ()
   deriving stock (GHC.Generic, Show)
-  deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped, NFData)
+  deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped)
 
 treeToOmega :: IO (Binary -> Omega)
 treeToOmega = generate (freely produce)
