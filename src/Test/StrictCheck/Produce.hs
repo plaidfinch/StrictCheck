@@ -41,6 +41,8 @@ import Generics.SOP
 import           Data.List.NonEmpty  ( NonEmpty(..) )
 import qualified Data.List.NonEmpty as NE
 
+import Data.Complex
+
 
 -------------------------------------------------------
 -- The user interface for creating Produce instances --
@@ -199,3 +201,42 @@ instance Produce a => Arbitrary (Lazy a) where
 -- function is to be produced, it will be almost-certainly non-strict.
 freely :: ((?inputs::Inputs) => Gen a) -> Gen a
 freely p = let ?inputs = Inputs [] in p
+
+
+---------------
+-- Instances --
+---------------
+
+instance Produce ()       where produce = arbitrary
+instance Produce Bool     where produce = arbitrary
+instance Produce Ordering where produce = arbitrary
+
+instance Produce Char     where produce = arbitrary
+instance Produce Word     where produce = arbitrary
+instance Produce Int      where produce = arbitrary
+instance Produce Double   where produce = arbitrary
+instance Produce Float    where produce = arbitrary
+instance Produce Rational where produce = arbitrary
+instance Produce Integer  where produce = arbitrary
+
+instance (Arbitrary a, RealFloat a) => Produce (Complex a) where
+  produce = arbitrary
+
+instance Produce a => Produce (Maybe a) where
+  produce =
+    oneof [ return Nothing
+          , Just <$> recur
+          ]
+
+instance (Produce a, Produce b) => Produce (Either a b) where
+  produce =
+    oneof [ Left <$> recur
+          , Right <$> recur
+          ]
+
+instance (Produce a) => Produce [a] where
+  produce =
+    frequency [ (1, return [])
+              , (1, (:) <$> recur
+                        <*> recur)
+              ]

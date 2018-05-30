@@ -59,6 +59,19 @@ module Test.StrictCheck.Shaped
   , Rendered(..)
   , RenderLevel(..)
   , renderfold
+  -- * Tools for manually writing instances of 'Shaped'
+  -- ** Implementing 'Shaped' for primitive types
+  , Prim(..), unPrim
+  , projectPrim
+  , embedPrim
+  , matchPrim
+  , flatPrim
+  , renderPrim
+  , renderConstant
+  -- ** Implementing 'Shaped' for container types
+  , Containing(..)
+  , projectContainer
+  , embedContainer
   -- * Generic implementation of the methods of 'Shaped'
   , GShaped
   , GShape(..)
@@ -68,13 +81,16 @@ module Test.StrictCheck.Shaped
   , gRender
   ) where
 
-import Data.Typeable
+import Type.Reflection
 import Data.Functor.Product
 import Data.Bifunctor
 import Data.Bifunctor.Flip
 import Data.Coerce
 
 import Generics.SOP hiding ( Shape )
+
+import Data.Complex
+-- import Data.List.NonEmpty (NonEmpty(..))
 
 import Test.StrictCheck.Shaped.Flattened
 
@@ -292,13 +308,12 @@ reshape :: forall b a f g. (Shaped a, Shaped b, Functor f)
         -> (forall x. Shaped x => f % x -> g % x)
         -> f % a -> g % a
 reshape homo hetero d =
-  case eqT @a @b of
+  case eqTypeRep (typeRep @a) (typeRep @b) of
     Nothing   -> hetero d
-    Just Refl ->
+    Just HRefl ->
       Wrap
       $ homo . fmap (translate @a (reshape @b homo hetero))
       $ unwrap d
-
 
 
 ----------------------------------
@@ -352,6 +367,183 @@ data Rendered f =
 deriving instance Eq   (f (RenderLevel (Rendered f))) => Eq   (Rendered f)
 deriving instance Ord  (f (RenderLevel (Rendered f))) => Ord  (Rendered f)
 deriving instance Show (f (RenderLevel (Rendered f))) => Show (Rendered f)
+
+
+----------------------------------------------------
+-- Tools for manually writing instances of Shaped --
+----------------------------------------------------
+
+-- | The @Shape@ of a spine-strict container (i.e. a @Map@ or @Set@) is the same
+-- as a container of demands on its elements. However, this does not have the
+-- right /kind/ to be used as a @Shape@.
+--
+-- The @Containing@ newtype solves this problem. By defining the @Shape@ of some
+-- container @(C a)@ to be @(C `Containing` a)@, you can use the methods
+-- @projectContainer@ and @embedContainer@ to implement @project@ and @embed@
+-- for your container type (although you will still need to manually define
+-- @match@ and @render@).
+newtype Containing h a f =
+  Container (h (f a))
+  deriving (Eq, Ord, Show)
+
+-- | Generic implementation of @project@ for any container type whose @Shape@
+-- is represented as a @Containing@ newtype
+projectContainer :: (Functor c, Shaped a)
+  => (forall x. Shaped x => x -> f x)
+  -> c a -> Containing c a f
+projectContainer p x  = Container (fmap p x)
+
+-- | Generic implementation of @embed@ for any container type whose @Shape@
+-- is represented as a @Containing@ newtype
+embedContainer :: (Functor c, Shaped a)
+  => (forall x. Shaped x => f x -> x)
+  -> Containing c a f -> c a
+embedContainer e (Container x) = fmap e x
+
+
+-- TODO: helper functions for matching and prettying containers
+
+-- | The @Shape@ of a primitive type should be equivalent to the type itself.
+-- However, this does not have the right /kind/ to be used as a @Shape@.
+--
+-- The @Prim@ newtype solves this problem. By defining the @Shape@ of some
+-- primitive type @p@ to be @Prim p@, you can use the methods @projectPrim@,
+-- @embedPrim@, @matchPrim@, and @prettyPrim@ to completely fill in the
+-- definition of the @Shaped@ class for a primitive type.
+--
+-- __Note:__ It is only appropriate to use this @Shape@ representation when a
+-- type really is primitive, in that it contains no interesting substructure.
+-- If you use the @Prim@ representation inappropriately, StrictCheck will not be
+-- able to inspect the richer structure of the type in question.
+newtype Prim (x :: *) (f :: * -> *) = Prim x
+  deriving (Eq, Ord, Show)
+  deriving newtype (Num)
+
+-- | Get the wrapped @x@ out of a @Prim x f@ (inverse to the @Prim@ constructor)
+unPrim :: Prim x f -> x
+unPrim (Prim x) = x
+
+-- | Generic implementation of @project@ for any primitive type whose @Shape@ is
+-- is represented as a @Prim@ newtype
+projectPrim :: (forall x. Shaped x => x -> f x) -> a -> Prim a f
+projectPrim _ = Prim
+
+-- | Generic implementation of @embed@ for any primitive type whose @Shape@ is
+-- is represented as a @Prim@ newtype
+embedPrim :: (forall x. Shaped x => f x -> x) -> Prim a f -> a
+embedPrim _ = unPrim
+
+-- | Generic implementation of @match@ for any primitive type whose @Shape@ is
+-- is represented as a @Prim@ newtype with an underlying @Eq@ instance
+matchPrim :: Eq a => Prim a f -> Prim a g
+           -> (forall xs. All Shaped xs
+                => Flattened (Prim a) f xs
+                -> Maybe (Flattened (Prim a) g xs)
+                -> result)
+           -> result
+matchPrim (Prim a) (Prim b) k =
+  k (flatPrim a)
+     (if a == b then (Just (flatPrim b)) else Nothing)
+
+-- | Helper for writing @match@ instances for primitive types which don't have
+-- @Eq@ instance
+--
+-- This generates a @Flattened@ appropriate for using in the implementation of
+-- @match@. For more documentation on how to use this, see the documentation of
+-- 'match'.
+flatPrim :: a -> Flattened (Prim a) g '[]
+flatPrim x = Flattened (const (Prim x)) Nil
+
+-- | Generic implementation of @render@ for any primitive type whose @Shape@ is
+-- is represented as a @Prim@ newtype
+renderPrim :: Show a => Prim a (K x) -> RenderLevel x
+renderPrim (Prim a) = renderConstant (show a)
+
+-- | Given some @string@, generate a custom pretty-printing representation which
+-- just shows the string
+renderConstant :: String -> RenderLevel x
+renderConstant s = CustomD 11 [Left (Left s)]
+
+-- TODO: What about demands for abstract types with > 1 type of unbounded-count field?
+
+{-
+withFieldsContainer ::
+  forall c a f result.
+     (forall r h.
+        c (h a) ->
+        (forall x. Shaped x
+           => [h x]
+           -> (forall g. [g x] -> c (g a))
+           -> r)
+        -> r)
+  -> Containing c a f
+  -> (forall xs. All Shaped xs
+        => NP f xs
+        -> (forall g. NP g xs -> Containing c a g)
+        -> result)
+  -> result
+withFieldsContainer viaContaining (Container c) cont =
+  viaContaining c $
+    \list un ->
+       withNP @Shaped list (Container . un) cont
+
+-- TODO: Make this work for any number of lists of fields, by carefully using
+-- unsafeCoerce to deal with unknown list lengths
+
+withFieldsViaList ::
+  forall demand f result.
+     (forall r h.
+        demand h ->
+        (forall x. Shaped x
+           => [h x]
+           -> (forall g. [g x] -> demand g)
+           -> r)
+        -> r)
+  -> demand f
+  -> (forall xs. All Shaped xs
+        => NP f xs
+        -> (forall g. NP g xs -> demand g)
+        -> result)
+  -> result
+withFieldsViaList viaList demand cont =
+  viaList demand $
+    \list un ->
+       withNP @Shaped list un cont
+
+withNP :: forall c demand result f x. c x
+       => [f x]
+       -> (forall g. [g x] -> demand g)
+       -> (forall xs. All c xs
+             => NP f xs -> (forall g. NP g xs -> demand g) -> result)
+       -> result
+withNP list unList cont =
+  withUnhomogenized @c list $ \np ->
+    cont np (unList . homogenize)
+
+withConcatenated :: NP (NP f) xss -> (forall xs. NP f xs -> r) -> r
+withConcatenated pop cont =
+  case pop of
+    Nil         -> cont Nil
+    (xs :* xss) -> withConcatenated xss (withPrepended xs cont)
+  where
+    withPrepended ::
+      NP f ys -> (forall zs. NP f zs -> r)
+              -> (forall zs. NP f zs -> r)
+    withPrepended pre k rest =
+      case pre of
+        Nil        -> k rest
+        (x :* xs)  -> withPrepended xs (k . (x :*)) rest
+
+homogenize :: All ((~) a) as => NP f as -> [f a]
+homogenize      Nil  = []
+homogenize (a :* as) = a : homogenize as
+
+withUnhomogenized :: forall c a f r.
+  c a => [f a] -> (forall as. (All c as, All ((~) a) as) => NP f as -> r) -> r
+withUnhomogenized      []  k = k Nil
+withUnhomogenized (a : as) k =
+  withUnhomogenized @c as $ \np -> k (a :* np)
+-}
 
 
 ---------------------------------------------------
@@ -473,3 +665,203 @@ gRender (GS demand) =
                     (hcollapse demandFields)
         (S another, _ :* different) ->
           renderC m d another different
+
+
+---------------
+-- Instances --
+---------------
+
+instance Shaped ()
+instance Shaped Bool
+instance Shaped Ordering
+instance Shaped a => Shaped (Maybe a)
+instance (Shaped a, Shaped b) => Shaped (Either a b)
+instance Shaped a => Shaped [a]
+
+instance (Typeable a, Typeable b) => Shaped (a -> b) where
+  type Shape (a -> b) = Prim (a -> b)
+  project = projectPrim
+  embed = embedPrim
+  match (Prim f) (Prim g) k = k (flatPrim f) (Just $ flatPrim g)
+  render _ = renderConstant ("<function> :: " ++ show (typeRep @(a -> b)))
+
+instance Shaped Char where
+  type Shape Char = Prim Char
+  project = projectPrim
+  embed   = embedPrim
+  match   = matchPrim
+  render  = renderPrim
+
+instance Shaped Word where
+  type Shape Word = Prim Word
+  project = projectPrim
+  embed   = embedPrim
+  match   = matchPrim
+  render  = renderPrim
+
+instance Shaped Int where
+  type Shape Int = Prim Int
+  project = projectPrim
+  embed   = embedPrim
+  match   = matchPrim
+  render  = renderPrim
+
+instance Shaped Double where
+  type Shape Double = Prim Double
+  project = projectPrim
+  embed   = embedPrim
+  match   = matchPrim
+  render  = renderPrim
+
+instance Shaped Float where
+  type Shape Float = Prim Float
+  project = projectPrim
+  embed   = embedPrim
+  match   = matchPrim
+  render  = renderPrim
+
+instance Shaped Rational where
+  type Shape Rational = Prim Rational
+  project = projectPrim
+  embed   = embedPrim
+  match   = matchPrim
+  render  = renderPrim
+
+instance Shaped Integer where
+  type Shape Integer = Prim Integer
+  project = projectPrim
+  embed   = embedPrim
+  match   = matchPrim
+  render  = renderPrim
+
+instance (Typeable a, Eq a, Show a) => Shaped (Complex a) where
+  type Shape (Complex a) = Prim (Complex a)
+  project = projectPrim
+  embed   = embedPrim
+  match   = matchPrim
+  render  = renderPrim
+
+-- instance Generic (NonEmpty a)
+-- instance HasDatatypeInfo (NonEmpty a)
+-- instance Shaped a => Shaped (NonEmpty a) where
+
+-- Tree
+-- Map k
+-- Seq
+-- Set
+-- IntMap
+-- IntSet
+
+instance (Shaped a, Shaped b) => Shaped (a, b)
+instance (Shaped a, Shaped b, Shaped c) => Shaped (a, b, c)
+instance (Shaped a, Shaped b, Shaped c, Shaped d) => Shaped (a, b, c, d)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e
+         ) => Shaped
+  (a, b, c, d, e)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         ) => Shaped
+  (a, b, c, d, e, f)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g
+         ) => Shaped
+  (a, b, c, d, e, f, g)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h
+         ) => Shaped
+  (a, b, c, d, e, f, g, h)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+         , Shaped s
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+         , Shaped s, Shaped t
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+         , Shaped s, Shaped t, Shaped u
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+         , Shaped s, Shaped t, Shaped u, Shaped v
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+         , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+         , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w, Shaped x
+          ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+         , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w, Shaped x
+         , Shaped y
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y)
+instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+         , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w, Shaped x
+         , Shaped y, Shaped z
+         ) => Shaped
+  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z)
