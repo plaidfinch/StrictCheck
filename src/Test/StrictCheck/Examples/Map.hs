@@ -10,7 +10,6 @@ import Generics.SOP (Generic, HasDatatypeInfo, NS(..), hd, tl)
 
 import Test.StrictCheck
 import Test.StrictCheck.TH
-import Control.DeepSeq
 
 import Data.Maybe
 import Data.Function
@@ -19,7 +18,7 @@ import Data.Function
 data Map k v = Bin (Map k v) k v (Map k v)
              | Empty
              deriving stock    (GHC.Generic, Show, Eq, Ord)
-             deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped, NFData)
+             deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped)
 
 type KMap = Map (Int, Int) Int
 
@@ -88,7 +87,7 @@ iterSolutionWithKey (Key k) = iterSolution k
 
 newtype Key = Key { getKey :: (Int, Int) }
   deriving stock    (GHC.Generic, Show, Eq, Ord)
-  deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped, NFData)
+  deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped)
 
 instance Arbitrary Key where
   -- Just to make sure keys are within the parameters of the problem

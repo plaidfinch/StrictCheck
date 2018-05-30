@@ -1,10 +1,9 @@
 module Test.StrictCheck.Examples.Lists where
 
 import Test.StrictCheck
-import Control.DeepSeq
 import Data.Functor
 
-length_spec :: Shaped a => Spec '[[a]] Int
+length_spec :: Spec '[[a]] Int
 length_spec =
   Spec $ \predict _ xs ->
     predict (xs $> thunk)
@@ -15,18 +14,18 @@ take' n (x : xs)
   | n > 0     = x : take' (n-1) xs
   | otherwise = []
 
-take_spec_too_easy :: Shaped a => Spec '[Int, [a]] [a]
+take_spec_too_easy :: Spec '[Int, [a]] [a]
 take_spec_too_easy =
   Spec $ \predict _d n xs ->
     predict n xs
 
-take_spec :: Shaped a => Spec '[Int, [a]] [a]
+take_spec :: Spec '[Int, [a]] [a]
 take_spec =
   Spec $ \predict d n xs ->
     predict n (if n > length xs then d else d ++ thunk)
 
 map_spec
-  :: forall a b. (Shaped a, Shaped b, NFDemand a, NFDemand b)
+  :: forall a b. (Shaped a, Shaped b)
   => Spec '[a -> b, [a]] [b]
 map_spec =
   Spec $ \predict d f xs ->
@@ -54,10 +53,8 @@ f %* a = toDemand $ fromDemand f (fromDemand a)
 -- replaceThunk :: (Shaped a, Shaped b) => a -> b -> a
 -- replaceThunk = undefined
 
-type NFDemand a = NFData (Shape a Demand)
-
 -- TODO: make n-ary version of this (CPS-ed)
-specify1 :: forall a b. (Shaped a, Shaped b , NFDemand a, NFDemand b)
+specify1 :: forall a b. (Shaped a, Shaped b)
          => (a -> b) -> b -> a -> a
 specify1 f b a =
   fromDemand . snd $ observe1 (toContext b) f a
@@ -66,7 +63,7 @@ toContext :: Shaped b => b -> b -> ()
 toContext b =
   case toDemand b of
     T    -> const ()
-    E b' -> evaluate b'
+    E b' -> evaluateDemand b'
 
 rotate :: [a] -> [a] -> [a] -> [a]
 rotate [      ] [      ] as =                       as
