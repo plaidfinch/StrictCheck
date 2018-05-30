@@ -125,7 +125,7 @@ returning out =
 -- specify the type(s) of the argument(s) to the function.
 variadic ::
   forall args result.
-  (All Consume args, Curry args, SListI args, ?inputs::Inputs)
+  (All Consume args, Curry args, ?inputs::Inputs)
   => ((?inputs::Inputs) => Gen result)
   -> Gen (args ⋯-> result)
 variadic out =

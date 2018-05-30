@@ -155,7 +155,7 @@ consumeContainer = constructor 0 . fmap consume . Fold.toList
 instance Consume v => Consume (Seq v)    where consume = consumeContainer
 instance Consume v => Consume (Set v)    where consume = consumeContainer
 instance Consume v => Consume (IntMap v) where consume = consumeContainer
-instance Consume v => Consume IntSet where
+instance Consume IntSet where
   consume = consumeContainer . IntSet.toList
 
 -- TODO: instances for the rest of Containers
