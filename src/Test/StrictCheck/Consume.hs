@@ -28,21 +28,6 @@ import Generics.SOP.NS
 
 import Test.StrictCheck.Internal.Inputs
 
-import Data.Monoid    as Monoid
-import Data.Semigroup as Semigroup
-import Control.Applicative
-import Control.Monad.State
-import Control.Monad.Cont
-import Control.Monad.Except
-import Control.Monad.Identity
-import Control.Monad.RWS
-import Control.Monad.Reader
-import Control.Monad.Writer
-import Control.Monad.ST
-import GHC.Conc
-import Data.Functor.Product as Functor
-import Data.Functor.Sum     as Functor
-import Data.Functor.Compose as Functor
 import Data.Complex
 
 import Data.Foldable as Fold
@@ -134,9 +119,6 @@ gConsume !(from -> sop) =
 -- Instances --
 ---------------
 
-instance Consume (IO a)    where consume = consumeTrivial
-instance Consume (STM a)   where consume = consumeTrivial
-instance Consume (ST s a)  where consume = consumeTrivial
 instance Consume (a -> b)  where consume = consumeTrivial
 instance Consume (Proxy p) where consume = consumeTrivial
 
@@ -150,26 +132,6 @@ instance Consume Integer  where consume = consumePrimitive
 instance (CoArbitrary a, RealFloat a) => Consume (Complex a) where
   consume = consumePrimitive
 
-deriving newtype instance Consume a => Consume (Identity a)
-deriving newtype instance Consume (RWST r w s m a)
-deriving newtype instance Consume (ReaderT r m a)
-deriving newtype instance Consume (StateT s m a)
-deriving newtype instance Consume (m (a, w)) => Consume (WriterT w m a)
-deriving newtype instance Consume (ContT r m a)
-deriving newtype instance Consume (m (Either e a)) => Consume (ExceptT e m a)
-deriving newtype instance Consume a => Consume (ZipList a)
-deriving newtype instance Consume a => Consume (Monoid.First a)
-deriving newtype instance Consume a => Consume (Monoid.Last a)
-deriving newtype instance Consume a => Consume (Semigroup.First a)
-deriving newtype instance Consume a => Consume (Semigroup.Last a)
-deriving newtype instance Consume a => Consume (Min a)
-deriving newtype instance Consume a => Consume (Max a)
-deriving newtype instance Consume a => Consume (Monoid.Sum a)
-deriving newtype instance Consume a => Consume (Monoid.Product a)
-deriving newtype instance Consume (f (g a)) => Consume (Functor.Compose f g a)
-deriving newtype instance Consume a => Consume (Dual a)
-deriving newtype instance Consume a => Consume (Const a b)
-
 instance Consume ()
 instance Consume Bool
 instance Consume Ordering
@@ -177,19 +139,6 @@ instance Consume a => Consume (Maybe a)
 instance (Consume a, Consume b) => Consume (Either a b)
 instance Consume a => Consume [a]
 
-deriving newtype instance Consume a => Consume (I a)
-deriving newtype instance Consume a => Consume (K a b)
--- TODO: instances for the rest of the SOP newtypes
-
-instance (Consume (f a), Consume (g a)) => Consume (Functor.Sum f g a) where
-  consume (InL a) = constructor 0 [consume a]
-  consume (InR b) = constructor 1 [consume b]
-
-instance (Consume (f a), Consume (g a)) => Consume (Functor.Product f g a) where
-  consume (Pair a b) = constructor 0 [consume a, consume b]
-
-instance (Consume a, Consume b) => Consume (Semigroup.Arg a b) where
-  consume (Arg a b) = constructor 0 [consume a, consume b]
 
 instance Consume a => Consume (NonEmpty a) where
   consume (a :| as) = constructor 0 [consume a, consume as]

@@ -1,4 +1,15 @@
-module Test.StrictCheck.Instances.Tools where
+module Test.StrictCheck.Instances.Tools
+  ( Containing(..)
+  , projectContainer
+  , embedContainer
+  , Prim(..), unPrim
+  , projectPrim
+  , embedPrim
+  , matchPrim
+  , flatPrim
+  , renderPrim
+  , renderConstant
+  ) where
 
 import Control.DeepSeq
 
@@ -6,44 +17,70 @@ import Generics.SOP
 import GHC.Generics as GHC
 
 import Test.StrictCheck.Shaped
-import Test.StrictCheck.Shaped.Flattened
 
--- | Convenience type for representing demands upon abstract structures with one
--- type recursively-demanded type parameter (i.e. (Map k) or Seq)
-
+-- | The @Shape@ of a spine-strict container (i.e. a @Map@ or @Set@) is the same
+-- as a container of demands on its elements. However, this does not have the
+-- right /kind/ to be used as a @Shape@.
+--
+-- The @Containing@ newtype solves this problem. By defining the @Shape@ of some
+-- container @(C a)@ to be @(C `Containing` a)@, you can use the methods
+-- @projectContainer@ and @embedContainer@ to implement @project@ and @embed@
+-- for your container type (although you will still need to manually define
+-- @match@ and @render@).
 newtype Containing h a f =
   Container (h (f a))
   deriving (Eq, Ord, Show, GHC.Generic)
   deriving newtype NFData
 
+-- | Generic implementation of @project@ for any container type whose @Shape@
+-- is represented as a @Containing@ newtype
 projectContainer :: (Functor c, Shaped a)
   => (forall x. Shaped x => x -> f x)
   -> c a -> Containing c a f
+projectContainer p x  = Container (fmap p x)
 
+-- | Generic implementation of @embed@ for any container type whose @Shape@
+-- is represented as a @Containing@ newtype
 embedContainer :: (Functor c, Shaped a)
   => (forall x. Shaped x => f x -> x)
   -> Containing c a f -> c a
+embedContainer e (Container x) = fmap e x
 
-projectContainer p            x  = Container (fmap p x)
-embedContainer   e (Container x) =            fmap e x
 
 -- TODO: helper functions for matching and prettying containers
 
--- | Convenience type for representing demands upon primitive types (i.e. Int)
-
+-- | The @Shape@ of a primitive type should be equivalent to the type itself.
+-- However, this does not have the right /kind/ to be used as a @Shape@.
+--
+-- The @Prim@ newtype solves this problem. By defining the @Shape@ of some
+-- primitive type @p@ to be @Prim p@, you can use the methods @projectPrim@,
+-- @embedPrim@, @matchPrim@, and @prettyPrim@ to completely fill in the
+-- definition of the @Shaped@ class for a primitive type.
+--
+-- __Note:__ It is only appropriate to use this @Shape@ representation when a
+-- type really is primitive, in that it contains no interesting substructure.
+-- If you use the @Prim@ representation inappropriately, StrictCheck will not be
+-- able to inspect the richer structure of the type in question.
 newtype Prim (x :: *) (f :: * -> *) = Prim x
   deriving (Eq, Ord, Show, GHC.Generic)
   deriving newtype (NFData, Num)
 
+-- | Get the wrapped @x@ out of a @Prim x f@ (inverse to the @Prim@ constructor)
 unPrim :: Prim x f -> x
 unPrim (Prim x) = x
 
+-- | Generic implementation of @project@ for any primitive type whose @Shape@ is
+-- is represented as a @Prim@ newtype
 projectPrim :: (forall x. Shaped x => x -> f x) -> a -> Prim a f
 projectPrim _ = Prim
 
+-- | Generic implementation of @embed@ for any primitive type whose @Shape@ is
+-- is represented as a @Prim@ newtype
 embedPrim :: (forall x. Shaped x => f x -> x) -> Prim a f -> a
 embedPrim _ = unPrim
 
+-- | Generic implementation of @match@ for any primitive type whose @Shape@ is
+-- is represented as a @Prim@ newtype with an underlying @Eq@ instance
 matchPrim :: Eq a => Prim a f -> Prim a g
            -> (forall xs. All Shaped xs
                 => Flattened (Prim a) f xs
@@ -54,14 +91,24 @@ matchPrim (Prim a) (Prim b) k =
   k (flatPrim a)
      (if a == b then (Just (flatPrim b)) else Nothing)
 
+-- | Helper for writing @match@ instances for primitive types which don't have
+-- @Eq@ instance
+--
+-- This generates a @Flattened@ appropriate for using in the implementation of
+-- @match@. For more documentation on how to use this, see the documentation of
+-- 'match'.
 flatPrim :: a -> Flattened (Prim a) g '[]
 flatPrim x = Flattened (const (Prim x)) Nil
 
-prettyPrim :: Show a => Prim a (K x) -> RenderLevel x
-prettyPrim (Prim a) = prettyConstant (show a)
+-- | Generic implementation of @render@ for any primitive type whose @Shape@ is
+-- is represented as a @Prim@ newtype
+renderPrim :: Show a => Prim a (K x) -> RenderLevel x
+renderPrim (Prim a) = renderConstant (show a)
 
-prettyConstant :: String -> RenderLevel x
-prettyConstant s = CustomD 11 [Left (Left s)]
+-- | Given some @string@, generate a custom pretty-printing representation which
+-- just shows the string
+renderConstant :: String -> RenderLevel x
+renderConstant s = CustomD 11 [Left (Left s)]
 
 
 -- TODO: What about demands for abstract types with > 1 type of unbounded-count field?
@@ -88,6 +135,7 @@ prettyConstant s = CustomD 11 [Left (Left s)]
 
 -- TODO: Make this work for any number of lists of fields, by carefully using
 -- unsafeCoerce to deal with unknown list lengths
+{-
 withFieldsViaList ::
   forall demand f result.
      (forall r h.
@@ -141,3 +189,4 @@ withUnhomogenized :: forall c a f r.
 withUnhomogenized      []  k = k Nil
 withUnhomogenized (a : as) k =
   withUnhomogenized @c as $ \np -> k (a :* np)
+-}

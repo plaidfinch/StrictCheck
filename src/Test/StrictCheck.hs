@@ -26,6 +26,7 @@ import Test.StrictCheck.Curry as Curry
 import Test.StrictCheck.Produce          as Exported
 import Test.StrictCheck.Consume          as Exported
 import Test.StrictCheck.Observe          as Exported
+import Test.StrictCheck.Demand           as Exported
 import Test.StrictCheck.Instances        as Exported
 import Test.StrictCheck.Shaped           as Exported
 import Test.StrictCheck.Shaped.Flattened as Exported
@@ -49,7 +50,7 @@ import Control.Monad
 import Type.Reflection
 
 compareEquality :: All Shaped xs => NP DemandComparison xs
-compareEquality = hcpure (Proxy :: Proxy Shaped) (DemandComparison eqDemand)
+compareEquality = hcpure (Proxy :: Proxy Shaped) (DemandComparison (==))
 
 genViaProduce :: All Produce xs => NP Gen xs
 genViaProduce = hcpure (Proxy :: Proxy Produce) (freely produce)

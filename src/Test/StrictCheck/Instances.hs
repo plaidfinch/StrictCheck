@@ -33,21 +33,21 @@ instance Shaped Integer where
   project    = projectPrim
   embed      = embedPrim
   match      = matchPrim
-  render     = prettyPrim
+  render     = renderPrim
 
 instance Shaped Int where
   type Shape Int = Prim Int
   project    = projectPrim
   embed      = embedPrim
   match      = matchPrim
-  render     = prettyPrim
+  render     = renderPrim
 
 instance Shaped Char where
   type Shape Char = Prim Char
   project    = projectPrim
   embed      = embedPrim
   match      = matchPrim
-  render     = prettyPrim
+  render     = renderPrim
 
 instance Shaped Bool
 
@@ -56,7 +56,7 @@ instance (Typeable a, Typeable b) => Shaped (a -> b) where
   project = projectPrim
   embed = embedPrim
   match (Prim f) (Prim g) k = k (flatPrim f) (Just $ flatPrim g)
-  render _ = prettyConstant ("<function> :: " ++ show (typeRep @(a -> b)))
+  render _ = renderConstant ("<function> :: " ++ show (typeRep @(a -> b)))
 
 -- instance (Typeable a, Typeable b) => Shaped (a -> b) where
 --   type Demand (a -> b) = Opaque (a -> b)
@@ -64,7 +64,7 @@ instance (Typeable a, Typeable b) => Shaped (a -> b) where
 --   embedD      = embedOpaque
 --   withFconstructor 0D = withFconstructor 0Opaque
 --   matchD      = matchOpaque
---   prettyD _   = prettyConstant "<function>"
+--   prettyD _   = renderConstant "<function>"
 
 -- instance (Shaped v, Typeable k, Ord k, Show k) => Shaped (Map k v) where
 --   type Demand (Map k v) = Map k `Containing` v

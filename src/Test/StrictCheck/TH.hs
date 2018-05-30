@@ -3,7 +3,7 @@
 module Test.StrictCheck.TH where
 
 import Generics.SOP (NP(..), NS(..))
-import Test.StrictCheck.Observe (Thunk(..), Demand)
+import Test.StrictCheck.Demand
 import Test.StrictCheck.Shaped
 
 import Control.Monad (when)

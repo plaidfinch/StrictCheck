@@ -41,6 +41,7 @@
 -}
 module Test.StrictCheck.Shaped
   ( Shaped(..)
+  , module Test.StrictCheck.Shaped.Flattened
   -- * Fixed-points of 'Shape's
   , type (%)(..)
   -- * Folds and unfolds over fixed-points of @Shape@s
@@ -72,10 +73,8 @@ import Data.Functor.Product
 import Data.Bifunctor
 import Data.Bifunctor.Flip
 import Data.Coerce
-import Control.DeepSeq
 
 import Generics.SOP hiding ( Shape )
-import qualified GHC.Generics as GHC
 
 import Test.StrictCheck.Shaped.Flattened
 
@@ -474,45 +473,3 @@ gRender (GS demand) =
                     (hcollapse demandFields)
         (S another, _ :* different) ->
           renderC m d another different
-
-
---------------------------------------
--- Deriving instances for things... --
---------------------------------------
-
-deriving instance GHC.Generic (f % a)
-deriving stock   instance (Eq     (f (Shape a ((%) f)))) => Eq     (f % a)
-deriving stock   instance (Ord    (f (Shape a ((%) f)))) => Ord    (f % a)
-deriving stock   instance (Show   (f (Shape a ((%) f)))) => Show   (f % a)
-deriving newtype instance (NFData (f (Shape a ((%) f)))) => NFData (f % a)
-
-instance Num (f (Shape a ((%) f))) => Num (f % a) where
-  (+)         = onWrap2 (+)
-  (-)         = onWrap2 (-)
-  (*)         = onWrap2 (*)
-  abs         = onWrap abs
-  signum      = onWrap signum
-  fromInteger = Wrap . fromInteger
-
-onWrap :: (f (Shape a ((%) f)) -> f (Shape b ((%) f)))
-       -> f % a -> f % b
-onWrap f (Wrap a) = Wrap (f a)
-
-onWrap2 :: (f (Shape a ((%) f)) -> f (Shape b ((%) f)) -> f (Shape c ((%) f)))
-        -> f % a -> f % b -> f % c
-onWrap2 f (Wrap a) (Wrap b) = Wrap (f a b)
-
-deriving instance GHC.Generic (GShape a f)
-deriving instance ( SListI (Code a)
-                  , All (Compose Eq (NP f)) (Code a)
-                  ) => Eq (GShape a f)
-deriving instance ( SListI (Code a)
-                  , All (Compose Eq (NP f)) (Code a)
-                  , All (Compose Ord (NP f)) (Code a)
-                  ) => Ord (GShape a f)
-deriving instance ( SListI (Code a)
-                  , All (Compose Show (NP f)) (Code a)
-                  ) => Show (GShape a f)
-deriving newtype instance ( SListI (Code a)
-                  , All (Compose NFData (NP f)) (Code a)
-                  ) => NFData (GShape a f)
