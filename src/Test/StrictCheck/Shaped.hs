@@ -365,10 +365,6 @@ data RenderLevel x
 data Rendered f
   = RWrap (f (RenderLevel (Rendered f)))
 
-deriving instance Eq   (f (RenderLevel (Rendered f))) => Eq   (Rendered f)
-deriving instance Ord  (f (RenderLevel (Rendered f))) => Ord  (Rendered f)
-deriving instance Show (f (RenderLevel (Rendered f))) => Show (Rendered f)
-
 
 ----------------------------------------------------
 -- Tools for manually writing instances of Shaped --

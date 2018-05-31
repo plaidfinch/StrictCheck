@@ -1,8 +1,14 @@
 {-| The top-level interface to the StrictCheck library for random strictness
     testing.
 
-    __Quick Start:__ Want to check the strictness of a function against a
-    specification of its strictness?
+    __Quick Start:__
+
+    Want to explore the strictness of functions before you write specifications?
+    Go to "Test.StrictCheck.Observe" and look at the functions 'observe1' and
+    'observe'.
+
+    Want to check the strictness of a function against a specification of its
+    strictness?
 
     1. Write a 'Spec' describing your expectation of the function's behavior.
        See "Test.StrictCheck.Demand" for more on working with demands, and
