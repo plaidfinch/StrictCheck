@@ -2,11 +2,11 @@ name:                StrictCheck
 version:             0.2.1
 synopsis:            StrictCheck: Keep Your Laziness In Check
 description: StrictCheck is a property-based random testing framework for
-observing, specifying, and testing the strictness behaviors of Haskell
-functions. Strictness behavior is traditionally considered a non-functional
-property; StrictCheck allows it to be tested as if it were one, by reifying
-demands on data structures so they can be manipulated and examined within
-Haskell.
+             observing, specifying, and testing the strictness behaviors of Haskell
+             functions. Strictness behavior is traditionally considered a non-functional
+             property; StrictCheck allows it to be tested as if it were one, by reifying
+             demands on data structures so they can be manipulated and examined within
+             Haskell.
 homepage:            https://github.com/kwf/StrictCheck#readme
 license:             MIT
 license-file:        LICENSE
