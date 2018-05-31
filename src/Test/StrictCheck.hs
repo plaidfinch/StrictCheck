@@ -1,5 +1,24 @@
 {-| The top-level interface to the StrictCheck library for random strictness
-    testing. For a detailed tutorial, see (TODO: tutorial).
+    testing.
+
+    __Quick Start:__ Want to check the strictness of a function against a
+    specification of its strictness?
+
+    1. Write a 'Spec' describing your expectation of the function's behavior.
+       See "Test.StrictCheck.Demand" for more on working with demands, and
+       "Test.StrictCheck.Examples.Lists" for examples of some specifications of
+       functions on lists.
+    2. Check your function using 'strictCheckSpecExact', like so:
+
+    > strictCheckSpecExact spec function
+
+    If your function passes testing, you'll get a success message just like in
+    "Test.QuickCheck"; if a counterexample to your specification is found, you
+    will see a pretty Unicode box diagram describing the mismatch.
+
+    __Hint:__ StrictCheck, just like QuickCheck, doesn't work with polymorphic
+    functions. If you get baffling type errors, first make sure that all your
+    types are totally concrete.
 -}
 module Test.StrictCheck
   ( -- * Specifying demand behavior
