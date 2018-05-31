@@ -1,4 +1,7 @@
-{-| This module defines the internal exception type used to implement the
+{-| __Internal module__: This module does not make any stability guarantees, and
+    may not adhere to the PVP.
+
+    This module defines the internal exception type used to implement the
     to/from-Demand methods in "Test.StrictCheck.Demand". We don't export this
     type from the library to discourage users from interacting with this
     mechanism.

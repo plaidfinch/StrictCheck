@@ -56,6 +56,7 @@ module Test.StrictCheck.Shaped
   , module Data.Functor.Product
   , reshape
   -- * Rendering 'Shaped' things as structured text
+  , QName
   , Rendered(..)
   , RenderLevel(..)
   , renderfold
@@ -361,8 +362,8 @@ data RenderLevel x
 -- | @Rendered f@ is the fixed-point of @f@ composed with 'RenderLevel': it
 -- alternates between @f@ shapes and @RenderLevel@s. Usually, @f@ will be the
 -- identity functor 'I', but not always.
-data Rendered f =
-  RWrap (f (RenderLevel (Rendered f)))
+data Rendered f
+  = RWrap (f (RenderLevel (Rendered f)))
 
 deriving instance Eq   (f (RenderLevel (Rendered f))) => Eq   (Rendered f)
 deriving instance Ord  (f (RenderLevel (Rendered f))) => Ord  (Rendered f)
@@ -382,8 +383,8 @@ deriving instance Show (f (RenderLevel (Rendered f))) => Show (Rendered f)
 -- @projectContainer@ and @embedContainer@ to implement @project@ and @embed@
 -- for your container type (although you will still need to manually define
 -- @match@ and @render@).
-newtype Containing h a f =
-  Container (h (f a))
+newtype Containing h a f
+  = Container (h (f a))
   deriving (Eq, Ord, Show)
 
 -- | Generic implementation of @project@ for any container type whose @Shape@
@@ -415,7 +416,8 @@ embedContainer e (Container x) = fmap e x
 -- type really is primitive, in that it contains no interesting substructure.
 -- If you use the @Prim@ representation inappropriately, StrictCheck will not be
 -- able to inspect the richer structure of the type in question.
-newtype Prim (x :: *) (f :: * -> *) = Prim x
+newtype Prim (x :: *) (f :: * -> *)
+  = Prim x
   deriving (Eq, Ord, Show)
   deriving newtype (Num)
 
@@ -553,8 +555,8 @@ withUnhomogenized (a : as) k =
 -- | The 'Shape' used for generic implementations of 'Shaped'
 --
 -- This wraps a sum-of-products representation from "Generics.SOP".
-newtype GShape a f =
-  GS (NS (NP f) (Code a))
+newtype GShape a f
+  = GS (NS (NP f) (Code a))
 
 -- | The collection of constraints necessary for a type to be given a generic
 -- implementation of the 'Shaped' methods

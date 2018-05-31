@@ -38,6 +38,8 @@ library
                        Test.StrictCheck.Shaped.Flattened,
                        Test.StrictCheck.Internal.Inputs,
                        Test.StrictCheck.Internal.Unevaluated,
+                       Test.StrictCheck.Internal.Shrink,
+                       Test.StrictCheck.Internal.Omega,
                        Test.StrictCheck.TH,
                        Test.StrictCheck.Examples.Lists,
                        Test.StrictCheck.Examples.Map
@@ -52,7 +54,7 @@ library
                        GeneralizedNewtypeDeriving, ViewPatterns, ImplicitParams,
                        NamedFieldPuns, PatternSynonyms
   ghc-options:         -Wall -fno-warn-unticked-promoted-constructors
-                       -Wredundant-constraints
+                       -Wredundant-constraints -O2
 
 test-suite test-strictcheck
   type:                 exitcode-stdio-1.0

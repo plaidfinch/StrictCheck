@@ -5,6 +5,7 @@
 
     A demand for some type @T@ can be represented one of two interconvertible
     ways:
+
     * explicitly, as a recursively interleaved @Shape@ of @T@
     * implicitly, as a value of @T@ with specially-tagged bottom values
       which represent un-evaluated portions of that value
@@ -25,6 +26,7 @@ module Test.StrictCheck.Demand
   , evaluateDemand
   , shrinkDemand
   , prettyDemand, printDemand
+  , eqDemand
   , showPrettyFieldThunkS
   -- * The implicit @Demand@ interface
   , thunk, isThunk

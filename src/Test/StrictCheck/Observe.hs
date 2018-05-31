@@ -47,7 +47,7 @@ import Test.StrictCheck.Demand
 -- >>> printDemand a  -- input demand
 -- _ : _ : _ : _ : []
 --
--- This tells us that @(`seq` ())@ did indeed evaluate the result of @reverse@
+-- This tells us that our context did indeed evaluate the result of @reverse@
 -- to force only its first constructor, and that doing so required the entire
 -- spine of the list to be evaluated, but did not evaluate any of its elements.
 observe1

@@ -1,6 +1,9 @@
+{-| Template Haskell to derive pattern synonyms for working with demands
+-}
 {-# LANGUAGE TemplateHaskell #-}
-
-module Test.StrictCheck.TH where
+module Test.StrictCheck.TH
+  ( derivePatternSynonyms
+  ) where
 
 import Generics.SOP (NP(..), NS(..))
 import Test.StrictCheck.Demand
@@ -71,6 +74,9 @@ constructor2PatternDec ty idx (InfixC argType1 conName argType2) = do
 constructor2PatternDec _ _ _ =
   fail "Test.StrictCheck.TH cannot derive pattern synonyms for fancy types"
 
+-- | Template Haskell splice to generate pattern synonym declarations for
+-- working with explicitly-represented demands on a type whose 'Shape' is
+-- implemented generically as a 'GShape'
 derivePatternSynonyms :: Name -> Q [Dec]
 derivePatternSynonyms name = do
   nameInfo <- reify name

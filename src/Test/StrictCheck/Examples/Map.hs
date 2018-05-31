@@ -14,6 +14,8 @@ import Test.StrictCheck.TH
 import Data.Maybe
 import Data.Function
 
+import Test.QuickCheck
+
 
 data Map k v = Bin (Map k v) k v (Map k v)
              | Empty

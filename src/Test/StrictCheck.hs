@@ -1,74 +1,122 @@
-{-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
-{-# OPTIONS_GHC -fno-warn-dodgy-exports -fno-warn-unused-imports #-}
-
+{-| The top-level interface to the StrictCheck library for random strictness
+    testing. For a detailed tutorial, see (TODO: tutorial).
+-}
 module Test.StrictCheck
-  ( module Exported
-  , NP(..), I(..)
+  ( -- * Specifying demand behavior
+    Spec(..)
+  , getSpec
+  -- * Checking specifications
+  , StrictCheck
   , strictCheckSpecExact
   , strictCheckWithResults
-  , compareToSpecWith
-  , equalToSpec
+  -- * Providing arguments for 'strictCheckWithResults'
+  , genViaProduce
+  , Shrink(..)
+  , shrinkViaArbitrary
+  , Strictness
+  , strictnessViaSized
+  -- * Representing individual evaluations of functions
+  , Evaluation(..)
   , evaluationForall
   , shrinkEvalWith
-  , shrinkViaArbitrary
-  , genViaProduce
-  , strictnessViaSized
-  , Demands
-  , Spec(..)
-  , Evaluation(..)
+  -- * Comparing demands
+  , DemandComparison(..)
+  , compareToSpecWith
+  , equalToSpec
+  -- * Re-exports of the rest of the library
+  , module Test.StrictCheck.Demand
+  , module Test.StrictCheck.Observe
+  , module Test.StrictCheck.Produce
+  , module Test.StrictCheck.Consume
+  , module Test.StrictCheck.Shaped
+  -- * Re-exported n-ary products from "Generics.SOP"
+  , NP(..), I(..)
   )
   where
 
 
+-- TODO: IMPORTANT: Add short descriptions to Haddock module headers
+
 import Test.StrictCheck.Curry as Curry
-import Test.StrictCheck.Produce          as Exported
-import Test.StrictCheck.Consume          as Exported
-import Test.StrictCheck.Observe          as Exported
-import Test.StrictCheck.Demand           as Exported
-import Test.StrictCheck.Shaped           as Exported
-import Test.StrictCheck.Shaped.Flattened as Exported
+import Test.StrictCheck.Produce
+import Test.StrictCheck.Consume
+import Test.StrictCheck.Observe
+import Test.StrictCheck.Demand
+import Test.StrictCheck.Shaped
+
+import Test.StrictCheck.Internal.Omega
+import Test.StrictCheck.Internal.Shrink
+         ( Shrink(..), axialShrinks, fairInterleave )
 
 import Generics.SOP hiding (Shape)
-import Generics.SOP.NP
-import qualified GHC.Generics as GHC
 
 import Test.QuickCheck as Exported hiding (Args, Result, function)
 import qualified Test.QuickCheck as QC
 
 import Data.List
-import Data.Functor.Product
 import Data.Maybe
-import Data.Coerce
-import qualified Unsafe.Coerce as UNSAFE
 import Data.IORef
-import System.IO
-import Control.Monad
 import Type.Reflection
 
+-- | The default comparison of demands: exact equality
 compareEquality :: All Shaped xs => NP DemandComparison xs
-compareEquality = hcpure (Proxy :: Proxy Shaped) (DemandComparison (==))
+compareEquality = hcpure (Proxy @Shaped) (DemandComparison (==))
 
+-- | The default way to generate inputs: via 'Produce'
 genViaProduce :: All Produce xs => NP Gen xs
-genViaProduce = hcpure (Proxy :: Proxy Produce) (freely produce)
+genViaProduce = hcpure (Proxy @Produce) (freely produce)
 
+-- | The default way to shrink inputs: via 'shrink' (from "Test.QuickCheck"'s
+-- 'Arbitrary' typeclass)
 shrinkViaArbitrary :: All Arbitrary xs => NP Shrink xs
-shrinkViaArbitrary = hcpure (Proxy :: Proxy Arbitrary) (Shrink shrink)
+shrinkViaArbitrary = hcpure (Proxy @Arbitrary) (Shrink shrink)
 
+-- | The default way to generate random strictnesses: uniformly choose between
+-- 1 and the test configuration's @size@ parameter
 strictnessViaSized :: Gen Strictness
-strictnessViaSized = choose . (1,) =<< getSize
+strictnessViaSized =
+  Strictness <$> (choose . (1,) =<< getSize)
 
+-- | A newtype for wrapping a comparison on demands
+--
+-- This is useful when constructing an 'NP' n-ary product of such comparisons.
 newtype DemandComparison a =
   DemandComparison (Demand a -> Demand a -> Bool)
 
-type family Demands args where
-  Demands '[       ] = '[]
-  Demands (a : args) = Demand a : Demands args
+-- | A demand specification for some function @f@ is itself a function which
+-- manipulates demand values for some function's arguments and results
+--
+-- A @Spec@ for @f@ wraps a function which takes, in order:
+--
+-- * a continuation @predict@ which accepts all of @f@'s argument types in order,
+-- * an implicit representation of a demand on @f@'s result (embedded in @f@'s
+--   actual result type using special bottom values, see the documentation for
+--   "Test.StrictCheck.Demand" for details), and
+-- * all of @f@'s original arguments in order
+--
+-- The intention is that the @Spec@ will call @predict@ on some set of demands
+-- representing the demands it predicts that @f@ will exert on its inputs,
+-- given the provided demand on @f@'s outputs.
+--
+-- For example, here is a correct @Spec@ for 'take':
+--
+-- > take_spec :: Spec '[Int, [a]] [a]
+-- > take_spec =
+-- >  Spec $ \predict d n xs ->
+-- >    predict n (if n > length xs then d else d ++ thunk)
+--
+-- See the documentation for "Test.StrictCheck.Demand" for information about how
+-- to manipulate these implicit demand representations when writing @Spec@s, and
+-- see the documentation for "Test.StrictCheck.Examples.Lists" for more examples
+-- of writing specifications.
+newtype Spec args result
+  = Spec (forall r. (args ⋯-> r) -> result -> args ⋯-> r)
 
-newtype Spec args result =
-  Spec (forall r. (args ⋯-> r)
-        -> result
-        -> args ⋯-> r)
-
+-- | Unwrap a @Spec@ constructor, returning the contained CPS-ed specification
+--
+-- Conceptually, this is the inverse to the @Spec@ constructor, but because
+-- @Spec@ is variadic, @getSpec . Spec@ and @Spec . getSpec@ don't typecheck
+-- without additional type annotation.
 getSpec
   :: forall r args result.
   Spec args result
@@ -77,9 +125,10 @@ getSpec
   -> args ⋯-> r
 getSpec (Spec s) k d = s @r k d
 
-curryCollect :: forall (xs :: [*]) r. Curry xs => (NP I xs -> r) -> xs ⋯-> r
-curryCollect k = Curry.curry @xs k
-
+-- | Given a list of ways to compare demands, a demand specification, and an
+-- evaluation of a particular function, determine if the function met the
+-- specification, as decided by the comparisons. If so, return the prediction
+-- of the specification.
 compareToSpecWith
   :: forall args result.
   (All Shaped args, Curry args, Shaped result)
@@ -90,7 +139,10 @@ compareToSpecWith
 compareToSpecWith comparisons spec (Evaluation inputs inputsD resultD) =
   let prediction =
         Curry.uncurry
-          (getSpec @(NP Demand args) spec collectDemands (fromDemand $ E resultD))
+          (getSpec @(NP Demand args)
+             spec
+             collectDemands
+             (fromDemand $ E resultD))
           inputs
       correct =
         all id . hcollapse $
@@ -102,8 +154,18 @@ compareToSpecWith comparisons spec (Evaluation inputs inputsD resultD) =
   in if correct then Nothing else Just prediction
   where
     collectDemands :: args ⋯-> NP Demand args
-    collectDemands = curryCollect @args (hcmap (Proxy :: Proxy Shaped) (toDemand . unI))
+    collectDemands =
+      curryCollect @args (hcmap (Proxy :: Proxy Shaped) (toDemand . unI))
 
+curryCollect
+  :: forall (xs :: [*]) r. Curry xs => (NP I xs -> r) -> xs ⋯-> r
+curryCollect k = Curry.curry @xs k
+
+-- | Checks if a given 'Evaluation' exactly matches the prediction of a given
+-- 'Spec', returning the prediction of that @Spec@ if not
+--
+-- __Note:__ In the case of __success__ this returns @Nothing@; in the case of
+-- __failure__ this returns @Just@ the incorrect prediction.
 equalToSpec
   :: forall args result.
   (All Shaped args, Shaped result, Curry args)
@@ -113,19 +175,46 @@ equalToSpec
 equalToSpec spec e =
   compareToSpecWith compareEquality spec e
 
-type Strictness = Int
+-- | A @Strictness@ represents (roughly) how strict a randomly generated
+-- function or evaluation context should be
+--
+-- An evaluation context generated with some strictness @s@ (i.e. through
+-- 'evaluationForall') will consume at most @s@ constructors of its input,
+-- although it might consume fewer.
+newtype Strictness
+  = Strictness Int
+  deriving stock (Eq, Ord)
+  deriving newtype (Show, Num)
 
+-- | A function can be checked against a specification if it meets the
+-- @StrictCheck@ constraint
 type StrictCheck function =
-  ( SListI (Args function)
-  , Shaped (Result function)
+  ( Shaped (Result function)
   , Consume (Result function)
   , Curry (Args function)
-  , Curry (Demands (Args function))
   , All Typeable (Args function)
   , All Shaped (Args function) )
 
--- TODO: CPS n-ary products out of the interface?
-
+-- | The most general function for random strictness testing: all of the more
+-- convenient such functions can be derived from this one
+--
+-- Given some function @f@, this takes as arguments:
+--
+-- * A 'QC.Args' record describing arguments to pass to the underlying
+--   QuickCheck engine
+-- * An 'NP' n-ary product of 'Shrink' shrinkers, one for each argument of @f@
+-- * An 'NP' n-ary product of 'Gen' generators, one for each argument of @f@
+-- * A 'Gen' generator for strictnesses to be tested
+-- * A predicate on 'Evaluation's: if the 'Evaluation' passes the predicate,
+--   it should return @Nothing@; otherwise, it should return @Just@ some
+--   @evidence@ representing the failure (when checking 'Spec's, this evidence
+--   comes in the form of a @Spec@'s (incorrect) prediction)
+-- * the function @f@ to be tested
+--
+-- If all tests succeed, @(Nothing, result)@ is returned, where @result@ is the
+-- underlying 'QC.Result' type from "Test.QuickCheck". If there is a test
+-- failure, it also returns @Just@ the failed 'Evaluation' as well as whatever
+-- @evidence@ was produced by the predicate.
 strictCheckWithResults ::
   forall function evidence.
   StrictCheck function
@@ -156,6 +245,11 @@ strictCheckWithResults
       Nothing      -> pure (Nothing,      result)
       Just example -> pure (Just example, result)
 
+-- | Check a function to see whether it exactly meets a strictness specification
+--
+-- If the function fails to meet the specification, a counterexample is
+-- pretty-printed in a box-drawn diagram illustrating how the specification
+-- failed to match the real observed behavior of the function.
 strictCheckSpecExact
   :: forall function.
   ( StrictCheck function
@@ -173,21 +267,125 @@ strictCheckSpecExact spec function =
          strictnessViaSized
          (equalToSpec spec)
          function
-     -- print result
      (putStrLn . head . lines) (output result)
      case maybeExample of
        Nothing -> return ()
        Just example ->
-         putStrLn (displayCounterSpec example)
+         putStrLn (Prelude.uncurry displayCounterSpec example)
 
--- TODO: Move this pretty-printing elsewhere
--- TODO: Use this to show Evaluations?
+------------------------------------------------------------
+-- An Evaluation is what we generate when StrictCheck-ing --
+------------------------------------------------------------
 
+-- | A snapshot of the observed strictness behavior of a function
+--
+-- An @Evaluation@ contains the 'inputs' at which a function was called, the
+-- 'inputDemands' which were induced upon those inputs, and the 'resultDemand'
+-- which induced that demand on the inputs.
+data Evaluation args result =
+  Evaluation
+    { inputs       :: NP I      args    -- ^ Inputs to a function
+    , inputDemands :: NP Demand args    -- ^ Demands on the input
+    , resultDemand :: PosDemand result  -- ^ Demand on the result
+    }
+
+instance (All Typeable args, Typeable result)
+  => Show (Evaluation args result) where
+  show _ =
+    "<Evaluation> :: Evaluation"
+    ++ " '[" ++ intercalate ", " argTypes ++ "]"
+    ++ " " ++ show (typeRep :: TypeRep result)
+    where
+      argTypes :: [String]
+      argTypes =
+        hcollapse
+        $ hliftA (K . show)
+        $ (hcpure (Proxy @Typeable) typeRep :: NP TypeRep args)
+
+
+-----------------------------------
+-- Generating random evaluations --
+-----------------------------------
+
+-- | Given a list of generators for a function's arguments and a generator for
+-- random strictnesses (measured in number of constructors evaluated), create
+-- a generator for random 'Evaluation's of that function in random contexts
+evaluationForall
+  :: forall f.
+  ( Curry (Args f)
+  , Consume (Result f)
+  , Shaped (Result f)
+  , All Shaped (Args f)
+  ) => NP Gen (Args f)
+    -> Gen Strictness
+    -> f
+    -> Gen (Evaluation (Args f) (Result f))
+evaluationForall gens strictnessGen function = do
+  inputs     <- hsequence gens
+  strictness <- strictnessGen
+  toOmega    <- freely produce
+  return (go strictness toOmega inputs)
+  where
+    -- If context is fully lazy, increase strictness until it forces something
+    go :: Strictness
+       -> (Result f -> Omega)
+       -> NP I (Args f)
+       -> Evaluation (Args f) (Result f)
+    go (Strictness s) tO is =
+      let (resultD, inputsD) =
+            observeNP (forceOmega s . tO) (uncurryAll @f function) is
+      in case resultD of
+        T -> go (Strictness s + 1) tO is
+        E posResultD ->
+          Evaluation is inputsD posResultD
+
+
+---------------------------
+-- Shrinking evaluations --
+---------------------------
+
+-- | Given a shrinker for each of the arguments of a function, the function
+-- itself, and some 'Evaluation' of that function, produce a list of smaller
+-- @Evaluation@s of that function
+shrinkEvalWith
+  :: forall f.
+  ( Curry (Args f)
+  , Shaped (Result f)
+  , All Shaped (Args f)
+  ) => NP Shrink (Args f)
+    -> f
+    -> Evaluation (Args f) (Result f)
+    -> [Evaluation (Args f) (Result f)]
+shrinkEvalWith
+  shrinks (uncurryAll -> function) (Evaluation inputs _ resultD) =
+    let shrunkDemands   = shrinkDemand @(Result f) resultD
+        shrunkInputs    = fairInterleave (axialShrinks shrinks inputs)
+        shrinkingDemand = mapMaybe      (reObserve inputs)  shrunkDemands
+        shrinkingInputs = mapMaybe (flip reObserve resultD) shrunkInputs
+    in fairInterleave [ shrinkingDemand, shrinkingInputs ]
+  where
+    reObserve
+      :: NP I (Args f)
+      -> PosDemand (Result f)
+      -> Maybe (Evaluation (Args f) (Result f))
+    reObserve is rD =
+      let (rD', isD) = observeNP (evaluateDemand rD) function is
+      in fmap (Evaluation is isD) $
+           case rD' of
+             T     -> Nothing
+             E pos -> Just pos
+
+
+-- | Render a counter-example to a specification (that is, an 'Evaluation'
+-- paired with some expected input demands it doesn't match) as a Unicode
+-- box-drawing sketch
 displayCounterSpec
   :: forall args result.
   (Shaped result, All Shaped args)
-  => (Evaluation args result, NP Demand args) -> String
-displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
+  => Evaluation args result
+  -> NP Demand args
+  -> String
+displayCounterSpec (Evaluation inputs inputsD resultD) predictedInputsD =
   beside inputBox ("   " : "───" : repeat "   ") resultBox
   ++ (flip replicate ' ' $
        (2 `max` (subtract 2 $ (lineMax [inputString] `div` 2))))
@@ -289,208 +487,3 @@ displayCounterSpec (Evaluation inputs inputsD resultD, predictedInputsD) =
         showNPWith'      Nil = ""
         showNPWith' (y :* ys) =
           " • " ++ display y ++ "\n" ++ showNPWith' ys
-
-
-------------------------------------------------------------
--- An Evaluation is what we generate when StrictCheck-ing --
-------------------------------------------------------------
-
-data Evaluation args result =
-  Evaluation
-    { inputs       :: NP I      args    -- ^ Inputs to a function
-    , inputDemands :: NP Demand args    -- ^ Demands on the input
-    , resultDemand :: PosDemand result  -- ^ Demand on the result
-    }
-
-instance (All Typeable args, Typeable result)
-  => Show (Evaluation args result) where
-  show _ =
-    "<Evaluation> :: Evaluation"
-    ++ " '[" ++ intercalate ", " argTypes ++ "]"
-    ++ " " ++ show (typeRep :: TypeRep result)
-    where
-      argTypes :: [String]
-      argTypes =
-        hcollapse
-        $ hliftA (K . show)
-        $ (hcpure (Proxy :: Proxy Typeable) typeRep :: NP TypeRep args)
-
--- TODO: Do not export this constructor?
-
-
------------------------------------
--- Generating random evaluations --
------------------------------------
-
-evaluationForall
-  :: forall f.
-  ( Curry (Args f)
-  , Consume (Result f)
-  , Shaped (Result f)
-  , All Shaped (Args f)
-  ) => NP Gen (Args f)
-    -> Gen Strictness
-    -> f
-    -> Gen (Evaluation (Args f) (Result f))
-evaluationForall gens strictnessGen function = do
-  inputs     <- hsequence gens
-  strictness <- strictnessGen
-  toOmega    <- freely produce
-  return (go strictness toOmega inputs)
-  where
-    -- If context is fully lazy, increase strictness until it forces something
-    go :: Strictness
-       -> (Result f -> Omega)
-       -> NP I (Args f)
-       -> Evaluation (Args f) (Result f)
-    go s tO is =
-      let (resultD, inputsD) =
-            observeNP (forceOmega s . tO) (uncurryAll @f function) is
-      in case resultD of
-        T -> go (s + 1) tO is
-        E posResultD ->
-          Evaluation is inputsD posResultD
-
-data Omega = Succ Omega
-  deriving (GHC.Generic, Generic, HasDatatypeInfo, Shaped)
-
-instance Produce Omega where
-  produce = Succ <$> recur
-
-forceOmega :: Int -> Omega -> ()
-forceOmega 0 _        = ()
-forceOmega n (Succ o) = forceOmega (n - 1) o
-
-
----------------------------
--- Shrinking evaluations --
----------------------------
-
-newtype Shrink a = Shrink (a -> [a])
-
--- TODO: make shrinking work instead over positive demands
-
-shrinkEvalWith
-  :: forall f.
-  ( Curry (Args f)
-  , Shaped (Result f)
-  , All Shaped (Args f)
-  ) => NP Shrink (Args f)
-    -> f
-    -> Evaluation (Args f) (Result f)
-    -> [Evaluation (Args f) (Result f)]
-shrinkEvalWith
-  shrinks (uncurryAll -> function) (Evaluation inputs _ resultD) =
-    let shrunkDemands = shrinkDemand @(Result f) resultD
-        shrunkInputs  = fairInterleave (axialShrinks shrinks inputs)
-        shrinkingDemand = mapMaybe      (reObserve inputs)  shrunkDemands
-        shrinkingInputs = mapMaybe (flip reObserve resultD) shrunkInputs
-    in fairInterleave [ shrinkingDemand, shrinkingInputs ]
-  where
-    reObserve
-      :: NP I (Args f)
-      -> PosDemand (Result f)
-      -> Maybe (Evaluation (Args f) (Result f))
-    reObserve is rD =
-      let (rD', isD) = observeNP (evaluateDemand rD) function is
-      in fmap (Evaluation is isD) $
-           case rD' of
-             T     -> Nothing
-             E pos -> Just pos
-
--- Fair n-ary axial shrinking (a.k.a. *fair* generalization of shrink on tuples)
-
-data DZipper f whole where
-  DZipper :: (NP f (c : rs) -> NP f whole)
-          -> f c
-          -> NP f rs
-          -> DZipper f whole
-
-next :: DZipper f whole -> Maybe (DZipper f whole)
-next (DZipper _  _       Nil)  = Nothing
-next (DZipper ls c (r :* rs')) =
-  Just $ DZipper (ls . (c :*)) r rs'
-
-positions :: NP f xs -> [DZipper f xs]
-positions (dzipper -> mstart) =
-  maybe [] go mstart
-  where
-    go start = start : maybe [] go (next start)
-
-dzipper :: NP f xs -> Maybe (DZipper f xs)
-dzipper       Nil = Nothing
-dzipper (c :* rs) = Just $ DZipper id c rs
-
-dzip :: DZipper f xs -> NP f xs
-dzip (DZipper ls c rs) = ls (c :* rs)
-
-centerIter :: (forall a. f a -> [f a]) -> DZipper f xs -> [DZipper f xs]
-centerIter iter (DZipper ls c rs) =
-  map (\c' -> DZipper ls c' rs) (iter c)
-
-axialShrinks :: SListI xs => NP Shrink xs -> NP I xs -> [[NP I xs]]
-axialShrinks shrinks xs =
-  fmap (hliftA (\(Pair _ v) -> v) . dzip)
-  . centerIter iter <$> positions withShrinks
-  where
-    iter (Pair (Shrink s) (I v)) = Pair (Shrink s) . I <$> (s v)
-    withShrinks = hliftA2 Pair shrinks xs
-
-fairInterleave :: [[a]] -> [a]
-fairInterleave = roundRobin id
-  where
-    roundRobin k ((x : xs) : xss) = x : roundRobin (k . (xs :)) xss
-    roundRobin k ([      ] : xss) = roundRobin k xss
-    roundRobin k [              ] =
-      case k [] of
-        [ ] -> []
-        xss -> roundRobin id xss
-
--- TODO: Think hard about what particular things to export from Generics.SOP
--- and, indeed, our own modules. And which modules to export other modules from
-
--- TODO: Get rid of these functions once we hit production...
-
--- TODO: Major documentation triage!
-
-grid :: Integer -> Integer -> [[(Integer, Integer)]]
-grid x y = map (\f -> map f [0..y]) $ map (,) [0..x]
-
-withGrid :: Integer -> Integer -> IO (Integer -> Integer -> Integer)
-withGrid x y = do
-  f <- generate (freely produce)
-  let results = map (map (Prelude.uncurry f)) (grid x y)
-  putStrLn ""
-  mapM_ print results
-  putStrLn ""
-  mapM_ print (transpose results)
-  return f
-
-data Binary =
-  N Binary Binary | L
-  deriving stock (Eq, Ord, Show, GHC.Generic)
-  deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped)
-
-binary :: Int -> Binary
-binary 0 = L
-binary n = N (binary (n - 1)) (binary (n - 1))
-
-
-data D = C ()
-  deriving stock (GHC.Generic, Show)
-  deriving anyclass (Generic, HasDatatypeInfo, Consume, Shaped)
-
-treeToOmega :: IO (Binary -> Omega)
-treeToOmega = generate (freely produce)
-
-forceBinaryN :: Int -> Binary -> ()
-forceBinaryN _ L = ()
-forceBinaryN 0 _ = ()
-forceBinaryN n (N l r) =
-  forceBinaryN (pred n) l `seq` forceBinaryN (pred n) r
-
-observeTreeToOmega :: (Binary -> Omega) -> Int -> Int -> Demand Binary
-observeTreeToOmega f m n = snd $ observe1 (forceOmega n) f (binary m)
-
--- TODO: "Evaluation" triple: inputs, result demand, input demands
--- Give it generation, shrinking, ...

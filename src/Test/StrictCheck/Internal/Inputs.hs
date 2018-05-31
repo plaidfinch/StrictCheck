@@ -27,8 +27,8 @@ import Data.Semigroup
 
 -- | A variant which can be applied to any generator--kept in a newtype to get
 -- around lack of impredicativity.
-newtype Variant =
-  Variant { vary :: forall a. Gen a -> Gen a }
+newtype Variant
+  = Variant { vary :: forall a. Gen a -> Gen a }
 
 instance Semigroup Variant where
   (<>) = mappend
