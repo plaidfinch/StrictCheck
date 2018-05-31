@@ -48,14 +48,14 @@ module Test.StrictCheck
   , DemandComparison(..)
   , compareToSpecWith
   , equalToSpec
+    -- * Re-exported n-ary products from "Generics.SOP"
+  , NP(..), I(..), All
   -- * Re-exports of the rest of the library
   , module Test.StrictCheck.Demand
   , module Test.StrictCheck.Observe
   , module Test.StrictCheck.Produce
   , module Test.StrictCheck.Consume
   , module Test.StrictCheck.Shaped
-  -- * Re-exported n-ary products from "Generics.SOP"
-  , NP(..), I(..)
   )
   where
 
@@ -171,7 +171,7 @@ compareToSpecWith comparisons spec (Evaluation inputs inputsD resultD) =
           inputs
       correct =
         all id . hcollapse $
-          hcliftA3 (Proxy :: Proxy Shaped)
+          hcliftA3 (Proxy @Shaped)
           (\(DemandComparison c) iD iD' -> K $ iD `c` iD')
             comparisons
             inputsD
@@ -180,7 +180,7 @@ compareToSpecWith comparisons spec (Evaluation inputs inputsD resultD) =
   where
     collectDemands :: args ⋯-> NP Demand args
     collectDemands =
-      curryCollect @args (hcmap (Proxy :: Proxy Shaped) (toDemand . unI))
+      curryCollect @args (hcmap (Proxy @Shaped) (toDemand . unI))
 
 curryCollect
   :: forall (xs :: [*]) r. Curry xs => (NP I xs -> r) -> xs ⋯-> r
