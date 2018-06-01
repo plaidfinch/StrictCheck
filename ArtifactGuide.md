@@ -66,7 +66,7 @@ docker cp $id:path /path/to/host/system
 docker rm -v $id
 ```
 
-If you built StrictCheck directly without using docker, the run `stack haddock`
+If you built StrictCheck directly without using docker, then run `stack haddock`
 in the StrictCheck source directory, `stack` will output a location to the
 documentaion html files like the following for local packages:
 
