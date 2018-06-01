@@ -17,7 +17,9 @@ of the artifact, follow these steps:
 
 1. Install Docker following the [official guide](https://docs.docker.com/install/)
 2. Download the image [here](https://drive.google.com/file/d/1JPlPobzX32emNHM1h9RiF0ae7Vo5K0Vy/view?usp=sharing); the image is around 3GB in size
-3. Check the MD5 hash of the image, it should be: `37a0dc0185614989a8e6cacd2e1026a9`
+3. Start the docker daemon, docker may ask for your host system credentials (it
+may also show a login UI for dockerhub, but you don't need to login to
+dockerhub for these instructions)
 4. Run `docker image load -i strictcheck-artifact.tgz`, this may take a few minutes
 5. Run `docker images`, and verify it shows an image with `REPOSITORY strictcheck`
 6. Run `docker run --rm -it strictcheck`
