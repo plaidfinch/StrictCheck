@@ -52,6 +52,8 @@ module, this will start the randomized testing of the given specification. We
 have also included a few incorrect specifications in this module, and you can
 test them to verify StrictCheck can indeed catch incorrect specifications.
 
+To run all of these tests at once, you can simply run `stack test`.
+
 ### How to build the docker image
 
 Run the following commands:
