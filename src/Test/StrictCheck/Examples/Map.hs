@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell, BangPatterns #-}
 
 {- | This module showcases another type of specification different from those in
-   "Test.StrictCheck.Examples.List". Here, we demonstrate that StrictCheck is
+   "Test.StrictCheck.Examples.Lists". Here, we demonstrate that StrictCheck is
    able to distinguish value-lazy maps from value-strict maps.
 
    In this module, we first develop the solution of the Knapsack dynamic
