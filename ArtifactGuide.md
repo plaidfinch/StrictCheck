@@ -54,6 +54,28 @@ test them to verify StrictCheck can indeed catch incorrect specifications.
 
 To run all of these tests at once, you can simply run `stack test`.
 
+### How to access haddock documentation
+
+If you used to the docker image to review StrictCheck, run the following
+commands to copy the generated haddock documentation to a location on your host
+system:
+
+```
+id=$(docker create strictcheck)
+docker cp $id:path /path/to/host/system
+docker rm -v $id
+```
+
+If you built StrictCheck directly without using docker, the run `stack haddock`
+in the StrictCheck source directory, `stack` will output a location to the
+documentaion html files like the following for local packages:
+
+```
+/path/to/StrictCheck/.stack-work/install/x86_64-osx/lts-11.10/8.2.2/doc/index.html
+```
+
+Then, you can open the `index.html` file with a web browser of your choice.
+
 ### How to build the docker image
 
 Run the following commands:
