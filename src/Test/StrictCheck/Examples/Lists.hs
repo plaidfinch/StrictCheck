@@ -123,6 +123,8 @@ rot fs bs = rotate fs bs []
 rot' :: [a] -> [a] -> [a]
 rot' fs bs = fs ++ reverse bs
 
+-- | A previous iteration of `rot_spec'`, this one is also correct, but may be
+-- less readable.
 rot_spec :: Shaped a => Spec '[[a], [a]] [a]
 rot_spec =
   Spec $ \predict d fs bs ->
@@ -140,6 +142,8 @@ rot_spec =
          (                    fs' ++ if overflow            then [] else thunk)
          (spinePad ++ reverse bs' ++ if overflow || overrot then [] else thunk)
 
+-- | A correct specification of `rot`, this is also the version we presented in
+-- the paper.
 rot_spec' :: Shaped a => Spec '[[a], [a]] [a]
 rot_spec' =
   Spec $ \predict d fs bs ->
@@ -183,7 +187,8 @@ rot_spec' =
 --rot_spec' :: Shaped a => Spec '[[a], [a]] [a]
 --rot_spec' = rot_spec
 
--- Leo: Still not working...
+-- | An incorrect specification for `rot` that miscalculates the number of cells
+-- forced.
 rot_simple_spec :: Shaped a => Spec '[[a], [a]] [a]
 rot_simple_spec =
   Spec $ \predict d fs bs ->
