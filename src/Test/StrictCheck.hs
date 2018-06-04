@@ -134,7 +134,7 @@ newtype DemandComparison a =
 -- to manipulate these implicit demand representations when writing @Spec@s, and
 -- see the documentation for "Test.StrictCheck.Examples.Lists" for more examples
 -- of writing specifications.
-newtype Spec args result
+newtype Spec (args :: [*]) (result :: *)
   = Spec (forall r. (args ⋯-> r) -> result -> args ⋯-> r)
 
 -- | Unwrap a @Spec@ constructor, returning the contained CPS-ed specification
