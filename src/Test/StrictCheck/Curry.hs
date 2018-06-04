@@ -99,8 +99,12 @@ class List (list :: [*] -> *) where
 -- | The Curry class witnesses that for any list of arguments, it is always
 -- possible to curry/uncurry at that arity
 class Curry (args :: [*]) where
-  uncurry :: List list => (args ⋯-> result) -> list args -> result
-  curry   :: List list => (list args -> result) -> args ⋯-> result
+  uncurry
+    :: forall result list.
+    List list => (args ⋯-> result) -> list args -> result
+  curry
+    :: forall result list.
+    List list => (list args -> result) -> args ⋯-> result
 
 instance Curry '[] where
   uncurry x = \(!_) -> x
