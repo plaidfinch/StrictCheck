@@ -114,14 +114,14 @@ observeNP context function inputs =
 -- Suppose we want to see how strict @zipWith (*)@ is when we evaluate its
 -- result completely (to normal form):
 --
--- >>> sumZip = zipWith ((*) @Int)
--- >>> (zs, (xs :* ys :* Nil)) = observe normalize sumZip [10, 20, 30] [40, 50]
+-- >>> productZip = zipWith ((*) @Int)
+-- >>> (zs, (xs :* ys :* Nil)) = observe normalize productZip [10, 20] [30, 40]
 -- >>> printDemand zs  -- output demand
--- 400 : 1000 : []
+-- 300 : 800 : []
 -- >>> printDemand xs  -- input demand #1
--- 10 : 20 : _ : _
+-- 10 : 20 : []
 -- >>> printDemand ys  -- input demand #2
--- 40 : 50 : []
+-- 30 : 40 : _
 --
 -- If you haven't thought very carefully about the strictness behavior of @zip@,
 -- this may be a surprising result; this is part of the fun!
