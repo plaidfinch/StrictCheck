@@ -21,26 +21,20 @@ module Test.StrictCheck.Produce
   -- * Abstract types representing input to a function
   , Input
   , Inputs
-  -- * Useful random distributions for processing @Input@s
-  , geometric
-  , pick1
+  -- * The traversal distribution for processing @Input@s
   , draws
   ) where
 
-import Test.QuickCheck
+import Test.QuickCheck hiding (variant)
 import Test.QuickCheck.Gen.Unsafe
-
-import Data.Monoid ((<>))
 
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
 import Test.StrictCheck.Curry
+
 import Generics.SOP
-
-import           Data.List.NonEmpty  ( NonEmpty(..) )
-import qualified Data.List.NonEmpty as NE
-
 import Data.Complex
+import Data.Monoid ((<>))
 
 
 -------------------------------------------------------
@@ -139,30 +133,6 @@ variadic out =
 -- Random destruction of the original input, as transformed into Input --
 -------------------------------------------------------------------------
 
--- | Sample a discrete geometric distribution with expectation 1
-geometric :: (Enum a, Num a) => Gen a
-geometric =
-  oneof [ return 0
-        , succ <$> geometric ]
-
--- | Uniformly choose an element of a list, returning the remainder
---
--- Returns an error if the list is empty.
-pick1 :: [a] -> Gen (a, [a])
-pick1 as = do
-  index <- choose (0, length as - 1)
-  return $ pickAt index as
-  where
-    pickAt :: Int -> [a] -> (a, [a])
-    pickAt _ [      ] =
-      error "pick1: empty list"
-    pickAt n (x : xs)
-      | n <= 0
-      = (x, xs)
-      | otherwise
-      = let (p, xs') = pickAt (n - 1) xs
-        in (p, x : xs')
-
 -- | Destruct a random subpart of the given 'Input's, returning the 'Variant'
 -- corresponding to the combined information harvested during this process, and
 -- the remaining "leaves" of the inputs yet to be destructed
@@ -175,28 +145,37 @@ pick1 as = do
 draws :: [Input] -> Gen (Variant, [Input])
 draws inputs = do
   budget <- geometric
-  (variants, levels) <- downFrom [inputs] budget
-  return (mconcat variants, concat levels)
+  inward [inputs] budget
   where
-    downFrom :: [[Input]] -> Int -> Gen ([Variant], [[Input]])
-    downFrom levels budget
+    inward :: [[Input]] -> Int -> Gen (Variant, [Input])
+    inward levels budget
       | budget <= 0
-      = return ([], levels)
+      = return (mempty, concat levels)  -- no more budget: collapse levels
       | otherwise
       = case levels of
-          [          ] -> return ([], [])
-          [  ] : above -> downFrom above budget  -- backtrack
-          here : above -> do
-            (v, below, here') <- pickChild here
+          [            ] -> return (mempty, [])    -- no more input: stop
+          [  ] : outside -> inward outside budget  -- nothing here: backtrack
+          here : outside -> do                     -- something here: go deeper
+            (input, here') <- pick here
+            let (v, inside) = draw input
             vary v $ do
-              (path, levels') <- downFrom (below : here' : above) (budget - 1)
-              return (v : path, levels')
+              (entropy, levels') <- inward (inside : here' : outside) (budget - 1)
+              return (v <> entropy, levels')
 
-    pickChild :: [Input] -> Gen (Variant, [Input], [Input])
-    pickChild is = do
-      (i, rest) <- pick1 is
-      let (v, inside) = draw i
-      return (v, inside, rest)
+    pick :: [a] -> Gen (a, [a])
+    pick as = do
+      index as <$> choose (0, length as - 1)
+      where
+        index [      ] _ = error "pick: empty list"
+        index (x : xs) n
+          | n <= 0    = (x, xs)
+          | otherwise = (x :) <$> index xs (n - 1)
+
+    geometric :: (Enum a, Num a) => Gen a
+    geometric =
+      oneof [ return 0
+            , succ <$> geometric ]
+
 
 
 ---------------------------------------------
