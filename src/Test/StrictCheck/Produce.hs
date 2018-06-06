@@ -23,7 +23,7 @@ module Test.StrictCheck.Produce
   , Inputs
   -- * Useful random distributions for processing @Input@s
   , geometric
-  , pick
+  , pick1
   , draws
   ) where
 
@@ -31,7 +31,6 @@ import Test.QuickCheck
 import Test.QuickCheck.Gen.Unsafe
 
 import Data.Monoid ((<>))
-import Data.Bifunctor
 
 import Test.StrictCheck.Internal.Inputs
 import Test.StrictCheck.Consume
@@ -143,16 +142,26 @@ variadic out =
 -- | Sample a discrete geometric distribution with expectation 1
 geometric :: (Enum a, Num a) => Gen a
 geometric =
-  oneof [return 0, succ <$> geometric]
+  oneof [ return 0
+        , succ <$> geometric ]
 
--- | Uniformly choose an element of a non-empty list, returning the remainder
-pick :: NonEmpty a -> Gen (a, [a])
-pick as = do
-  index <- choose (0, NE.length as - 1)
+-- | Uniformly choose an element of a list, returning the remainder
+--
+-- Returns an error if the list is empty.
+pick1 :: [a] -> Gen (a, [a])
+pick1 as = do
+  index <- choose (0, length as - 1)
   return $ pickAt index as
   where
-    pickAt 0 (x :| xs) = (x, xs)
-    pickAt n (x :| xs) = (x :) <$> pickAt (n - 1) (NE.fromList xs)
+    pickAt :: Int -> [a] -> (a, [a])
+    pickAt _ [      ] =
+      error "pick1: empty list"
+    pickAt n (x : xs)
+      | n <= 0
+      = (x, xs)
+      | otherwise
+      = let (p, xs') = pickAt (n - 1) xs
+        in (p, x : xs')
 
 -- | Destruct a random subpart of the given 'Input's, returning the 'Variant'
 -- corresponding to the combined information harvested during this process, and
@@ -165,22 +174,27 @@ pick as = do
 -- distribution with expectation 1.
 draws :: [Input] -> Gen (Variant, [Input])
 draws inputs = do
-  second concat <$> (downward [inputs] =<< geometric)
+  budget <- geometric
+  (variants, levels) <- downFrom [inputs] budget
+  return (mconcat variants, concat levels)
   where
-    downward :: [[Input]] -> Int -> Gen (Variant, [[Input]])
-    downward levels      0 = return (mempty, levels)
-    downward levels budget =
-      case levels of
-        [          ] -> return (mempty, [])
-        [  ] : above -> downward above budget  -- backtrack
-        here : above ->
-          do (v, below, here') <- draw1 (NE.fromList here)
-             (v', levels') <- vary v $ downward (below:here':above) (budget-1)
-             return (v <> v', levels')
+    downFrom :: [[Input]] -> Int -> Gen ([Variant], [[Input]])
+    downFrom levels budget
+      | budget <= 0
+      = return ([], levels)
+      | otherwise
+      = case levels of
+          [          ] -> return ([], [])
+          [  ] : above -> downFrom above budget  -- backtrack
+          here : above -> do
+            (v, below, here') <- pickChild here
+            vary v $ do
+              (path, levels') <- downFrom (below : here' : above) (budget - 1)
+              return (v : path, levels')
 
-    draw1 :: NonEmpty Input -> Gen (Variant, [Input], [Input])
-    draw1 is = do
-      (i, rest) <- pick is
+    pickChild :: [Input] -> Gen (Variant, [Input], [Input])
+    pickChild is = do
+      (i, rest) <- pick1 is
       let (v, inside) = draw i
       return (v, inside, rest)
 
