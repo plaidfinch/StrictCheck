@@ -112,7 +112,7 @@ instance Curry '[] where
 
 instance Curry xs => Curry (x : xs) where
   uncurry f = \(uncons -> (x, xs)) -> uncurry (f x) xs
-  curry   f = \x -> curry (f . (cons x))
+  curry   f = \x -> curry (\xs -> f (cons x xs))
 
 
 --------------------------------------------------------
