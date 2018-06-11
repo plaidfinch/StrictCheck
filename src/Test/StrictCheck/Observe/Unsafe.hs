@@ -68,6 +68,5 @@ entangle a =
 entangleShape :: Shaped a => a -> (a, Demand a)
 entangleShape =
   first (fuse unI)
-  . (\(Pair l r) -> (l, r))
-  . separate (uncurry Pair . first I . entangle . unI)
-  . (I %)
+  . unzipWith (first I . entangle . unI)
+  . interleave I

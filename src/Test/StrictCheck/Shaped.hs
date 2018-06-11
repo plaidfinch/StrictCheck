@@ -50,10 +50,9 @@ module Test.StrictCheck.Shaped
   , (%)
   , fuse
   , translate
-  , intrafold
-  , extrafold
-  , separate
-  , module Data.Functor.Product
+  , fold
+  , unfold
+  , unzipWith
   , reshape
   -- * Rendering 'Shaped' things as structured text
   , QName
@@ -239,39 +238,39 @@ translate t d = match @a d d $ \flat _ ->
 --
 -- Given a function which folds an @f@ containing some @Shape x g@ into a @g x@,
 -- recursively fold any interleaved @f % a@ into a @g a@.
-intrafold :: forall a f g. (Functor f, Shaped a)
-          => (forall x. Shaped x => f (Shape x g) -> g x)
-          -> f % a -> g a
-intrafold alg = alg . fmap (translate @a (intrafold alg)) . unwrap
+fold :: forall a f g. (Functor f, Shaped a)
+     => (forall x. Shaped x => f (Shape x g) -> g x)
+     -> f % a -> g a
+fold alg = alg . fmap (translate @a (fold alg)) . unwrap
 
 -- | The equivalent of an unfold (anamorphism) over recursively 'Shaped' values
 --
 -- Given a function which unfolds an @f x@ into a @g@ containing some @Shape x
 -- f@, corecursively unfold any @f a@ into an interleaved @g % a@.
-extrafold :: forall a f g. (Functor g, Shaped a)
-          => (forall x. Shaped x => f x -> g (Shape x f))
-          -> f a -> g % a
-extrafold coalg = Wrap . fmap (translate @a (extrafold coalg)) . coalg
+unfold :: forall a f g. (Functor g, Shaped a)
+       => (forall x. Shaped x => f x -> g (Shape x f))
+       -> f a -> g % a
+unfold coalg = Wrap . fmap (translate @a (unfold coalg)) . coalg
 
 -- TODO: mapM, foldM, unfoldM, ...
 
 -- | Fuse the interleaved @f@-structure out of a recursively interleaved @f %
 -- a@, given some way of fusing a single level @f x -> x@.
 --
--- This is a special case of 'intrafold'.
+-- This is a special case of 'fold'.
 fuse :: forall a f. (Functor f, Shaped a)
      => (forall x. f x -> x)
      -> f % a -> a
-fuse e = e . intrafold (fmap (embed e))
+fuse e = e . fold (fmap (embed e))
 
 -- | Interleave an @f@-structure at every recursive level of some @a@, given
 -- some way of generating a single level of structure @x -> f x@.
 --
--- This is a special case of 'extrafold'.
+-- This is a special case of 'unfold'.
 interleave :: forall a f. (Functor f, Shaped a)
            => (forall x. x -> f x)
            -> a -> f % a
-interleave p = extrafold (fmap (project p)) . p
+interleave p = unfold (fmap (project p)) . p
 
 -- | An infix synonym for 'interleave'
 (%) :: forall a f. (Functor f, Shaped a)
@@ -287,21 +286,29 @@ interleave p = extrafold (fmap (project p)) . p
 --
 -- Note that @Product ((%) g) ((%) h) a@ is isomorphic to @(g % a, h % a)@; to
 -- get the latter, pattern-match on the 'Pair' constructor of 'Product'.
-separate :: forall a f g h.
-         (Shaped a, Functor f, Functor g, Functor h)
-         => (forall x. f x -> Product g h x)
-         -> f % a -> Product ((%) g) ((%) h) a
-separate split =
-  intrafold (crunch . split)
+unzipWith
+  :: forall a f g h.
+  (Shaped a, Functor f, Functor g, Functor h)
+  => (forall x. f x -> (g x, h x))
+  -> f % a
+  -> (g % a, h % a)
+unzipWith split =
+  unPair . fold (crunch . pair . split)
   where
     crunch :: forall x. Shaped x
            => Product g h (Shape x (Product ((%) g) ((%) h)))
            -> Product ((%) g) ((%) h) x
     crunch =
-      uncurry Pair
-      . bimap (Wrap . fmap (translate @x (\(Pair l _) -> l)))
-              (Wrap . fmap (translate @x (\(Pair _ r) -> r)))
-      . (\(Pair l r) -> (l, r))
+      pair
+      . bimap (Wrap . fmap (translate @x (fst . unPair)))
+              (Wrap . fmap (translate @x (snd . unPair)))
+      . unPair
+
+    pair :: (l x, r x) -> Product l r x
+    pair = uncurry Pair
+
+    unPair :: Product l r x -> (l x, r x)
+    unPair (Pair lx rx) = (lx, rx)
 
 -- | TODO: document this strange function
 reshape :: forall b a f g. (Shaped a, Shaped b, Functor f)
@@ -325,7 +332,7 @@ reshape homo hetero d =
 -- suitable for further display/processing
 renderfold :: forall a f. (Shaped a, Functor f)
        => f % a -> Rendered f
-renderfold = unK . intrafold oneLevel
+renderfold = unK . fold oneLevel
   where
     oneLevel :: forall x. Shaped x
              => f (Shape x (K (Rendered f)))
@@ -763,103 +770,103 @@ instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
          , Shaped g
          ) => Shaped
   (a, b, c, d, e, f, g)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h
-         ) => Shaped
-  (a, b, c, d, e, f, g, h)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
-         , Shaped s
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
-         , Shaped s, Shaped t
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
-         , Shaped s, Shaped t, Shaped u
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
-         , Shaped s, Shaped t, Shaped u, Shaped v
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
-         , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
-         , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w, Shaped x
-          ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
-         , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w, Shaped x
-         , Shaped y
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y)
-instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
-         , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
-         , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
-         , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w, Shaped x
-         , Shaped y, Shaped z
-         ) => Shaped
-  (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+--          , Shaped s
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+--          , Shaped s, Shaped t
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+--          , Shaped s, Shaped t, Shaped u
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+--          , Shaped s, Shaped t, Shaped u, Shaped v
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+--          , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+--          , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w, Shaped x
+--           ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+--          , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w, Shaped x
+--          , Shaped y
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y)
+-- instance ( Shaped a, Shaped b, Shaped c, Shaped d, Shaped e, Shaped f
+--          , Shaped g, Shaped h, Shaped i, Shaped j, Shaped k, Shaped l
+--          , Shaped m, Shaped n, Shaped o, Shaped p, Shaped q, Shaped r
+--          , Shaped s, Shaped t, Shaped u, Shaped v, Shaped w, Shaped x
+--          , Shaped y, Shaped z
+--          ) => Shaped
+--   (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z)
