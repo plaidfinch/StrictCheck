@@ -131,9 +131,9 @@ toDemand = interleave toThunk
     {-# NOINLINE toThunk #-}
     toThunk :: a -> Thunk a
     toThunk a = unsafePerformIO $
-      (Eval <$> Exception.evaluate a)
-      `Exception.catch`
-      (\(_ :: Unevaluated) -> return Thunk)
+      Exception.catch
+        (let !_ = a in return (Eval a))
+        (\(_ :: Unevaluated) -> return Thunk)
 
 -- | Given an explicit @Demand@ for some type @a@, convert it to a value of type
 -- @a@, substituting a 'thunk' for each 'T' found in the explicit demand
