@@ -258,18 +258,20 @@ unfold coalg = Wrap . fmap (translate @a (unfold coalg)) . coalg
 -- a@, given some way of fusing a single level @f x -> x@.
 --
 -- This is a special case of 'fold'.
-fuse :: forall a f. (Functor f, Shaped a)
-     => (forall x. f x -> x)
-     -> f % a -> a
+fuse
+  :: (Functor f, Shaped a)
+  => (forall x. f x -> x)
+  -> (f % a -> a)
 fuse e = e . fold (fmap (embed e))
 
 -- | Interleave an @f@-structure at every recursive level of some @a@, given
 -- some way of generating a single level of structure @x -> f x@.
 --
 -- This is a special case of 'unfold'.
-interleave :: forall a f. (Functor f, Shaped a)
-           => (forall x. x -> f x)
-           -> a -> f % a
+interleave
+  :: (Functor f, Shaped a)
+  => (forall x. x -> f x)
+  -> (a -> f % a)
 interleave p = unfold (fmap (project p)) . p
 
 -- | An infix synonym for 'interleave'
@@ -287,17 +289,17 @@ interleave p = unfold (fmap (project p)) . p
 -- Note that @Product ((%) g) ((%) h) a@ is isomorphic to @(g % a, h % a)@; to
 -- get the latter, pattern-match on the 'Pair' constructor of 'Product'.
 unzipWith
-  :: forall a f g h.
-  (Shaped a, Functor f, Functor g, Functor h)
+  :: (All Functor [f, g, h], Shaped a)
   => (forall x. f x -> (g x, h x))
-  -> f % a
-  -> (g % a, h % a)
+  -> (f % a -> (g % a, h % a))
 unzipWith split =
   unPair . fold (crunch . pair . split)
   where
-    crunch :: forall x. Shaped x
-           => Product g h (Shape x (Product ((%) g) ((%) h)))
-           -> Product ((%) g) ((%) h) x
+    crunch
+      :: forall x g h.
+      (Shaped x, Functor g, Functor h)
+      => Product g h (Shape x (Product ((%) g) ((%) h)))
+      -> Product ((%) g) ((%) h) x
     crunch =
       pair
       . bimap (Wrap . fmap (translate @x (fst . unPair)))
