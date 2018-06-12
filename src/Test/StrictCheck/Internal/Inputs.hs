@@ -21,6 +21,7 @@ module Test.StrictCheck.Internal.Inputs
 import Test.QuickCheck (Gen)
 import Data.Semigroup
 
+
 --------------------------------------------------
 -- The core user-facing types: Input and Inputs --
 --------------------------------------------------
@@ -31,10 +32,10 @@ newtype Variant
   = Variant { vary :: forall a. Gen a -> Gen a }
 
 instance Semigroup Variant where
-  (<>) = mappend
+  v <> w = Variant (vary v . vary w)
 
 instance Monoid Variant where
-  v `mappend` w = Variant $ vary v . vary w
+  mappend = (<>)
   mempty = Variant id
 
 -- | A tree representing all possible destruction sequences for a value

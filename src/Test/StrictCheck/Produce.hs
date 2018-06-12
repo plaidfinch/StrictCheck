@@ -143,38 +143,32 @@ variadic out =
 -- depth-first random traversal with a budget sampled from a geometric
 -- distribution with expectation 1.
 draws :: [Input] -> Gen (Variant, [Input])
-draws inputs = do
-  budget <- geometric
-  inward [inputs] budget
+draws inputs = go [inputs]
   where
-    inward :: [[Input]] -> Int -> Gen (Variant, [Input])
-    inward levels budget
-      | budget <= 0
-      = return (mempty, concat levels)  -- no more budget: collapse levels
-      | otherwise
-      = case levels of
-          [            ] -> return (mempty, [])    -- no more input: stop
-          [  ] : outside -> inward outside budget  -- nothing here: backtrack
-          here : outside -> do                     -- something here: go deeper
-            (input, here') <- pick here
-            let (v, inside) = draw input
-            vary v $ do
-              (entropy, levels') <- inward (inside : here' : outside) (budget - 1)
-              return (v <> entropy, levels')
+    -- Mutually recursive:
+    go, inwardFrom :: [[Input]] -> Gen (Variant, [Input])
 
+    go levels =
+      oneof                               -- 50% choice between:
+        [ return (mempty, concat levels)  -- stop consuming input, or
+        , inwardFrom levels ]             -- keep consuming input
+
+    inwardFrom levels =
+      case levels of
+        [            ] -> return mempty         -- if no more input: stop
+        [  ] : outside -> inwardFrom outside    -- if nothing here: backtrack
+        here : outside -> do                    -- if something here: go deeper
+          (Input v inside, here') <- pick here
+          vary v $ do
+            (entropy, levels') <- go (inside : here' : outside)  -- back to 'go'
+            return (v <> entropy, levels')
+
+    -- Pick a random list element and the remaining list
     pick :: [a] -> Gen (a, [a])
     pick as = do
-      index as <$> choose (0, length as - 1)
-      where
-        index [      ] _ = error "pick: empty list"
-        index (x : xs) n
-          | n <= 0    = (x, xs)
-          | otherwise = (x :) <$> index xs (n - 1)
-
-    geometric :: (Enum a, Num a) => Gen a
-    geometric =
-      oneof [ return 0
-            , succ <$> geometric ]
+      index <- choose (0, length as - 1)
+      let (before, picked : after) = splitAt index as
+      return (picked, before ++ after)
 
 
 
