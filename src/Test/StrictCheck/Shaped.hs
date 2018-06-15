@@ -319,7 +319,7 @@ reshape :: forall b a f g. (Shaped a, Shaped b, Functor f)
         -> f % a -> g % a
 reshape homo hetero d =
   case eqTypeRep (typeRep @a) (typeRep @b) of
-    Nothing   -> hetero d
+    Nothing    -> hetero d
     Just HRefl ->
       Wrap
       $ homo . fmap (translate @a (reshape @b homo hetero))
@@ -397,7 +397,7 @@ newtype Containing h a f
 projectContainer :: (Functor c, Shaped a)
   => (forall x. Shaped x => x -> f x)
   -> c a -> Containing c a f
-projectContainer p x  = Container (fmap p x)
+projectContainer p x = Container (fmap p x)
 
 -- | Generic implementation of @embed@ for any container type whose @Shape@
 -- is represented as a @Containing@ newtype
