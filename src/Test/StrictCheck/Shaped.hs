@@ -332,8 +332,9 @@ reshape homo hetero d =
 
 -- | Convert an @f % a@ into a structured pretty-printing representation,
 -- suitable for further display/processing
-renderfold :: forall a f. (Shaped a, Functor f)
-       => f % a -> Rendered f
+renderfold
+  :: forall a f. (Shaped a, Functor f)
+  => f % a -> Rendered f
 renderfold = unK . fold oneLevel
   where
     oneLevel :: forall x. Shaped x
