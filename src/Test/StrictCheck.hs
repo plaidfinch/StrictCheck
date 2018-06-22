@@ -26,6 +26,9 @@
     functions. If you get baffling type errors, first make sure that all your
     types are totally concrete.
 -}
+
+{-# language DerivingStrategies #-}
+
 module Test.StrictCheck
   ( -- * Specifying demand behavior
     Spec(..)

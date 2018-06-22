@@ -1,4 +1,4 @@
-{-# LANGUAGE InstanceSigs #-}
+{-# language InstanceSigs, DerivingStrategies #-}
 {-# language PartialTypeSignatures #-}
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 {-| This module defines the 'Shaped' typeclass, which is used to generically
@@ -53,7 +53,7 @@ module Test.StrictCheck.Shaped
   , fold
   , unfold
   , unzipWith
-  , reshape
+  -- , reshape
   -- * Rendering 'Shaped' things as structured text
   , QName
   , Rendered(..)
@@ -313,6 +313,7 @@ unzipWith split =
     unPair (Pair lx rx) = (lx, rx)
 
 -- | TODO: document this strange function
+{-
 reshape :: forall b a f g. (Shaped a, Shaped b, Functor f)
         => (f (Shape b ((%) g)) -> g (Shape b ((%) g)))
         -> (forall x. Shaped x => f % x -> g % x)
@@ -324,7 +325,7 @@ reshape homo hetero d =
       Wrap
       $ homo . fmap (translate @a (reshape @b homo hetero))
       $ unwrap d
-
+-}
 
 ----------------------------------
 -- Rendering shapes for display --

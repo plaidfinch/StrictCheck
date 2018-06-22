@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, BangPatterns #-}
+{-# LANGUAGE TemplateHaskell, BangPatterns, DerivingStrategies #-}
 
 {- | This module showcases another type of specification different from those in
    "Test.StrictCheck.Examples.Lists". Here, we demonstrate that StrictCheck is

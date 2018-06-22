@@ -1,5 +1,5 @@
 name:                StrictCheck
-version:             0.2.1
+version:             0.1.0
 synopsis:            StrictCheck: Keep Your Laziness In Check
 description: StrictCheck is a property-based random testing framework for
              observing, specifying, and testing the strictness behaviors of Haskell
@@ -12,7 +12,7 @@ license:             MIT
 license-file:        LICENSE
 author:              Kenneth Foner, Hengchu Zhang, and Leo Lampropoulos
 maintainer:          kwf@very.science
-copyright:           (c) 2018 Kenneth Foner
+copyright:           (c) 2018 Kenneth Foner, Hengchu Zhang, and Leo Lampropoulos
 category:            Testing
 build-type:          Simple
 cabal-version:       >=1.10
@@ -49,11 +49,11 @@ library
                        UndecidableInstances, ConstraintKinds, DeriveFunctor,
                        FlexibleInstances, StandaloneDeriving, DeriveGeneric,
                        DeriveAnyClass, TypeOperators, PolyKinds,
-                       DerivingStrategies, GeneralizedNewtypeDeriving,
+                       GeneralizedNewtypeDeriving,
                        ViewPatterns, LambdaCase, TupleSections, ImplicitParams,
                        NamedFieldPuns, PatternSynonyms
-  ghc-options:         -Wall -fno-warn-unticked-promoted-constructors
-                       -Wredundant-constraints -O2
+  ghc-options:         -Wall -Wno-unticked-promoted-constructors
+                       -Wredundant-constraints
 
 test-suite test-strictcheck
   type:                 exitcode-stdio-1.0
@@ -68,22 +68,13 @@ test-suite test-strictcheck
                         FlexibleInstances, StandaloneDeriving, DeriveGeneric,
                         DeriveAnyClass, TypeOperators, PolyKinds, LambdaCase,
                         TupleSections, TypeFamilyDependencies,
-                        MultiParamTypeClasses, DerivingStrategies,
+                        MultiParamTypeClasses,
                         GeneralizedNewtypeDeriving, ViewPatterns,
                         PatternSynonyms
   ghc-options:         -Wall -fno-warn-unused-imports
   build-depends:        base,
                         HUnit,
-                        generics-sop >= 0.3.2.0,
+                        generics-sop,
                         deepseq,
                         StrictCheck,
                         QuickCheck
-
--- executable StrictCheck-exe
---   hs-source-dirs:      app
---   main-is:             Main.hs
---   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
---   build-depends:       base
---                      , StrictCheck
---                      , QuickCheck
---   default-language:    Haskell2010
