@@ -22,11 +22,11 @@ library
   hs-source-dirs:      src
   default-language:    Haskell2010
   build-depends:       base             >= 4.7   && < 5,
-                       QuickCheck       >= 2.10  && < 2.11,
-                       containers       >= 0.5   && < 0.6,
+                       QuickCheck       >= 2.10  && < 2.12,
+                       containers       >= 0.5   && < 0.7,
                        generics-sop     >= 0.3.2 && < 0.4,
                        bifunctors       >= 5.5   && < 5.6,
-                       template-haskell >= 2.12  && < 2.13
+                       template-haskell >= 2.12  && < 2.15
   exposed-modules:     Test.StrictCheck
                        Test.StrictCheck.Curry,
                        Test.StrictCheck.Consume,
@@ -59,7 +59,7 @@ test-suite test-strictcheck
   type:                 exitcode-stdio-1.0
   hs-source-dirs:       tests
   main-is:              Tests.hs
-  other-modules:        Specs
+  other-modules:        Specs, RefTrans
   default-language:     Haskell2010
   default-extensions:   DataKinds, GADTs, BangPatterns, TypeFamilies, RankNTypes,
                         AllowAmbiguousTypes, UndecidableInstances,
@@ -71,7 +71,7 @@ test-suite test-strictcheck
                         MultiParamTypeClasses,
                         GeneralizedNewtypeDeriving, ViewPatterns,
                         PatternSynonyms
-  ghc-options:         -Wall -fno-warn-unused-imports
+  ghc-options:         -Wall -fno-warn-unused-imports -O2
   build-depends:        base,
                         HUnit,
                         generics-sop,

@@ -50,6 +50,7 @@ import Test.StrictCheck.Demand
 -- This tells us that our context did indeed evaluate the result of @reverse@
 -- to force only its first constructor, and that doing so required the entire
 -- spine of the list to be evaluated, but did not evaluate any of its elements.
+{-# NOINLINE observe1 #-}
 observe1
   :: (Shaped a, Shaped b)
   => (b -> ()) -> (a -> b) -> a -> (Demand b, Demand a)
@@ -76,6 +77,7 @@ observe1 context function input =
 --
 -- This is mostly useful for implementing the internals of StrictCheck;
 -- 'observe' is more ergonomic for exploration by end-users.
+{-# NOINLINE observeNP #-}
 observeNP
   :: (All Shaped inputs, Shaped result)
   => (result -> ())
@@ -136,3 +138,5 @@ observe
        , NP Demand (Args function) )
 observe context function =
   curryAll (observeNP context (uncurryAll function))
+
+-- NOTE: We don't need a NOINLINE annotation here because this wraps observeNP.
