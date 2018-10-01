@@ -1,5 +1,5 @@
 name:                StrictCheck
-version:             0.1.0
+version:             0.1.1
 synopsis:            StrictCheck: Keep Your Laziness In Check
 description: StrictCheck is a property-based random testing framework for
              observing, specifying, and testing the strictness behaviors of Haskell
