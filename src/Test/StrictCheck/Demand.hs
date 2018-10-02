@@ -1,4 +1,3 @@
-{-# language DeriveTraversable #-}
 {-| A 'Demand' on some value of type @T@ is shaped like a @T@, but possibly
     truncated, to represent partial evaluation. This module defines the type of
     demands, and functions to manipulate them for the purpose of constructing
@@ -59,7 +58,7 @@ import Test.StrictCheck.Internal.Unevaluated
 data Thunk a
   = Eval !a
   | Thunk
-  deriving (Eq, Ord, Show, Functor, Foldable, Traversable, GHC.Generic)
+  deriving (Eq, Ord, Show, Functor, GHC.Generic)
 
 instance Applicative Thunk where
   pure = Eval
