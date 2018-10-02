@@ -163,7 +163,7 @@ entangle a = do
 -- >>> d
 -- "_"
 -- >>> length . take 3 $ x
--- 5
+-- 3
 -- >>> d
 -- "_ : _ : _ : _"
 -- >>> take 2 x
