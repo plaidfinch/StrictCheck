@@ -33,7 +33,6 @@ library
                        Test.StrictCheck.Produce,
                        Test.StrictCheck.Demand,
                        Test.StrictCheck.Observe,
-                       Test.StrictCheck.Observe.Unsafe,
                        Test.StrictCheck.Shaped,
                        Test.StrictCheck.Shaped.Flattened,
                        Test.StrictCheck.Internal.Inputs,
