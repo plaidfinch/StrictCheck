@@ -188,21 +188,20 @@ entangleShape = entangleShape' . project I
     entangleShape' s =
       (fmap (bimap fst (fmap Wrap . traverse snd =<<)) . entangle =<<)
       . unsafeInterleaveIO $
-      match @a s s (\flat _ ->
-        fmap (\flat' ->
-          let a :: a
-              a = embed unI . unflatten
-                  . mapFlattened @Shaped (\(WithDemand x _) -> I x)
+        match @a s s (\flatA _ ->
+          fmap (\flat' ->
+            let a = embed unI
+                  . unflatten
+                  . mapFlattened @Shaped (I . demanded)
                   $ flat'
-              ds :: IO (Shape a Demand)
-              ds = fmap unflatten
-                   . traverseFlattened @Shaped (\(WithDemand _ d) -> d)
+                ds = fmap unflatten
+                   . traverseFlattened @Shaped getDemand
                    $ flat'
-          in (a, ds))
-      . traverseFlattened @Shaped
-         ((uncurry WithDemand <$>) . entangleShape . unI)
-      $ flat)
+            in (a, ds))
+          . traverseFlattened @Shaped
+            ((uncurry WithDemand <$>) . entangleShape . unI)
+          $ flatA)
 
 -- Auxiliary functor for the traversal in 'entangleShape'
 data WithDemand a
-  = WithDemand a (IO (Demand a))
+  = WithDemand { demanded :: a, getDemand :: IO (Demand a) }
