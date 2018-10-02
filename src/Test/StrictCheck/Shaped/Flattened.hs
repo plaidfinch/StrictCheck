@@ -54,4 +54,4 @@ mapFlattened t (Flattened u p) =
 traverseFlattened :: forall c d f g h xs. (All c xs, Applicative h)
   => (forall x. c x => f x -> h (g x)) -> Flattened d f xs -> h (Flattened d g xs)
 traverseFlattened t (Flattened u p) =
-  Flattened u <$> (hctraverse' (Proxy @c) t p)
+  Flattened u <$> hctraverse' (Proxy @c) t p
