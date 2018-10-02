@@ -282,12 +282,9 @@ interleave p = unfold (fmap (project p)) . p
 
 -- | A higher-kinded @unzipWith@, operating over interleaved structures
 --
--- Given a function splitting some @f x@ into a functor-product @Product g h x@,
--- recursively split an interleaved @f % a@ into two interleaved structures:
--- one built of @g@-shapes and one of @h@-shapes.
---
--- Note that @Product ((%) g) ((%) h) a@ is isomorphic to @(g % a, h % a)@; to
--- get the latter, pattern-match on the 'Pair' constructor of 'Product'.
+-- Given a function splitting some @f x@ into a @g x@ and a @h x@, unzip and
+-- entire @f % a@ structure using this operation, yielding a @g % a@ and a
+-- @h % a@.
 unzipWith
   :: (All Functor [f, g, h], Shaped a)
   => (forall x. f x -> (g x, h x))
