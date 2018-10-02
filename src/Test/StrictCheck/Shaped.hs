@@ -50,8 +50,11 @@ module Test.StrictCheck.Shaped
   , (%)
   , fuse
   , translate
+  , translateA
   , fold
+  , foldM
   , unfold
+  , unfoldM
   , unzipWith
   -- , reshape
   -- * Rendering 'Shaped' things as structured text
@@ -86,6 +89,7 @@ import Data.Functor.Product
 import Data.Bifunctor
 import Data.Bifunctor.Flip
 import Data.Coerce
+import Control.Monad hiding (foldM)
 
 import Generics.SOP hiding ( Shape )
 
@@ -234,6 +238,14 @@ translate :: forall a f g. Shaped a
 translate t d = match @a d d $ \flat _ ->
   unflatten $ mapFlattened @Shaped t flat
 
+-- | The 'Applicative' version of 'translate'; maps an effectful translation
+-- over a given @Shape@.
+translateA :: forall a c f g. (Shaped a, Applicative c)
+           => (forall x. Shaped x => f x -> c (g x))
+           -> Shape a f -> c (Shape a g)
+translateA t d = match @a d d $ \flat _ ->
+  unflatten <$> traverseFlattened @Shaped t flat
+
 -- | The equivalent of a fold (catamorphism) over recursively 'Shaped' values
 --
 -- Given a function which folds an @f@ containing some @Shape x g@ into a @g x@,
@@ -243,6 +255,12 @@ fold :: forall a f g. (Functor f, Shaped a)
      -> f % a -> g a
 fold alg = alg . fmap (translate @a (fold alg)) . unwrap
 
+-- | The 'Monad' version of 'fold'; folds an interleaved structure effectfully.
+foldM :: forall a m f g. (Traversable f, Shaped a, Monad m)
+      => (forall x. Shaped x => f (Shape x g) -> m (g x))
+      -> f % a -> m (g a)
+foldM alg = alg <=< traverse (translateA @a (foldM alg)) . unwrap
+
 -- | The equivalent of an unfold (anamorphism) over recursively 'Shaped' values
 --
 -- Given a function which unfolds an @f x@ into a @g@ containing some @Shape x
@@ -251,6 +269,13 @@ unfold :: forall a f g. (Functor g, Shaped a)
        => (forall x. Shaped x => f x -> g (Shape x f))
        -> f a -> g % a
 unfold coalg = Wrap . fmap (translate @a (unfold coalg)) . coalg
+
+-- | The 'Monad' version of 'unfold'; unfolds an interleaved structure
+-- effectfully.
+unfoldM :: forall a m f g. (Traversable g, Shaped a, Monad m)
+         => (forall x. Shaped x => f x -> m (g (Shape x f)))
+         -> f a -> m (g % a)
+unfoldM coalg = fmap Wrap . traverse (translateA @a (unfoldM coalg)) <=< coalg
 
 -- TODO: mapM, foldM, unfoldM, ...
 
