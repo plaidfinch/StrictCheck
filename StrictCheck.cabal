@@ -58,7 +58,7 @@ test-suite test-strictcheck
   type:                 exitcode-stdio-1.0
   hs-source-dirs:       tests
   main-is:              Tests.hs
-  other-modules:        Specs, RefTrans
+  other-modules:        Specs, RefTrans, Entangle
   default-language:     Haskell2010
   default-extensions:   DataKinds, GADTs, BangPatterns, TypeFamilies, RankNTypes,
                         AllowAmbiguousTypes, UndecidableInstances,
