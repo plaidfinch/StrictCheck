@@ -154,7 +154,10 @@ observe context function =
 entangle :: a -> IO (a, IO (Thunk a))
 entangle a = do
   ref <- newIORef Thunk
-  pure (unsafePerformIO $ a <$ writeIORef ref (Eval a), readIORef ref)
+  return (unsafePerformIO $ do
+             writeIORef ref (Eval a)
+             return a,
+          readIORef ref)
 
 -- | Recursively entangles a value providing us with information about what
 -- parts of the value have already been evaluated. See 'entangle'.
@@ -171,8 +174,8 @@ entangle a = do
 -- >>> d
 -- "1 : 2 : _ : _"
 entangleShape :: Shaped a => a -> IO (a, IO (Demand a))
-entangleShape = entangle' . project I
-  -- There are a two properties we care about:
+entangleShape = entangleShape' . project I
+  -- NOTE: There are a two properties we care about:
   --
   --   1. Running the Demand action should always result in a consistent state
   --      and not depend on when its result is forced.
@@ -181,8 +184,8 @@ entangleShape = entangle' . project I
   --      parts of the input. This is especially important for the observe
   --      functions and the hardest thing to get right.
   where
-    entangle' :: forall a. Shaped a => Shape a I -> IO (a, IO (Demand a))
-    entangle' s =
+    entangleShape' :: forall a. Shaped a => Shape a I -> IO (a, IO (Demand a))
+    entangleShape' s =
       (fmap (bimap fst (fmap Wrap . traverse snd =<<)) . entangle =<<)
       . unsafeInterleaveIO $
       match @a s s (\flat _ ->
@@ -199,4 +202,7 @@ entangleShape = entangle' . project I
       . traverseFlattened @Shaped
          ((uncurry WithDemand <$>) . entangleShape . unI)
       $ flat)
-data WithDemand a = WithDemand a (IO (Demand a))
+
+-- Auxiliary functor for the traversal in 'entangleShape'
+data WithDemand a
+  = WithDemand a (IO (Demand a))
