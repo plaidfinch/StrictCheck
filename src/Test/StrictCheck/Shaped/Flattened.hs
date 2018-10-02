@@ -44,8 +44,14 @@ unflatten (Flattened u p) = u p
 
 -- | If all the fields in a @Flattened@ satisfy some constraint, map a function
 -- expecting that constraint across all the fields. This may change the functor
--- over which the @Flattened@ value is paramaterized.
+-- over which the @Flattened@ value is parameterized.
 mapFlattened :: forall c d f g xs. All c xs
   => (forall x. c x => f x -> g x) -> Flattened d f xs -> Flattened d g xs
 mapFlattened t (Flattened u p) =
   Flattened u (hcliftA (Proxy @c) t p)
+
+-- | 'traverseFlattened' is to 'traverse' like 'mapFlattened' is to 'fmap'.
+traverseFlattened :: forall c d f g h xs. (All c xs, Applicative h)
+  => (forall x. c x => f x -> h (g x)) -> Flattened d f xs -> h (Flattened d g xs)
+traverseFlattened t (Flattened u p) =
+  Flattened u <$> hctraverse' (Proxy @c) t p

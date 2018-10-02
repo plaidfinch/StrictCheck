@@ -11,16 +11,20 @@ module Test.StrictCheck.Observe
   ( observe1
   , observe
   , observeNP
+  , entangle
+  , entangleShape
   ) where
 
 import Data.Bifunctor
 import Data.Functor.Product
+import Data.Functor.Compose
+import Data.IORef
+import System.IO.Unsafe
 
 import Generics.SOP hiding (Shape)
 
 import Test.StrictCheck.Curry hiding (curry, uncurry)
 import Test.StrictCheck.Shaped
-import Test.StrictCheck.Observe.Unsafe
 import Test.StrictCheck.Demand
 
 ------------------------------------------------------
@@ -53,13 +57,11 @@ import Test.StrictCheck.Demand
 observe1
   :: (Shaped a, Shaped b)
   => (b -> ()) -> (a -> b) -> a -> (Demand b, Demand a)
-observe1 context function input =
-  let (input', inputD)  =
-        entangleShape input              -- (1)
-      (result', resultD) =
-        entangleShape (function input')  -- (2)
-  in let !_ = context result'            -- (3)
-  in (resultD, inputD)                   -- (4)
+observe1 context function input = unsafePerformIO $ do
+  (input',  inputD)  <- entangleShape input             -- (1)
+  (result', resultD) <- entangleShape (function input') -- (2)
+  let !_ = context result'                              -- (3)
+  (,) <$> resultD <*> inputD                            -- (4)
 
 -- | Observe the demand behavior
 --
@@ -83,18 +85,18 @@ observeNP
   -> NP I inputs
   -> ( Demand result
      , NP Demand inputs )
-observeNP context function inputs =
-  let entangled =
-        hcliftA
-          (Proxy @Shaped)
-          (uncurry Pair . first I . entangleShape . unI)
-          inputs
-      (inputs', inputsD) =
-        (hliftA (\(Pair r _) -> r) entangled,
-          hliftA (\(Pair _ l) -> l) entangled)
-      (result', resultD) = entangleShape (function inputs')
-  in let !_ = context result'
-  in (resultD, inputsD)
+observeNP context function inputs = unsafePerformIO $ do
+  entangled <-
+    hctraverse'
+      (Proxy @Shaped)
+      (fmap (uncurry Pair . bimap I Compose) . entangleShape . unI)
+      inputs
+  let (inputs', inputsD) =
+        (hliftA     (\(Pair r _) -> r           ) entangled,
+         htraverse' (\(Pair _ l) -> getCompose l) entangled)
+  (result', resultD) <- entangleShape (function inputs')
+  let !_ = context result'
+  (,) <$> resultD <*> inputsD
 
 -- | Observe the demand behavior
 --
@@ -136,3 +138,65 @@ observe
        , NP Demand (Args function) )
 observe context function =
   curryAll (observeNP context (uncurryAll function))
+
+-- | 'entangle' allows us to observe whether a value has been forced or not.
+-- The resulting 'IO' action creates a tuple with a value equal to the original
+-- value and another 'IO' action that when run gives us information whether the
+-- returned has been value forced.
+--
+-- >>> (x, d) <- entangle ()
+-- >>> d
+-- Thunk
+-- >>> x
+-- ()
+-- >>> d
+-- Eval ()
+entangle :: a -> IO (a, IO (Thunk a))
+entangle a = do
+  ref <- newIORef Thunk
+  pure (unsafePerformIO $ a <$ writeIORef ref (Eval a), readIORef ref)
+
+-- | Recursively entangles a value providing us with information about what
+-- parts of the value have already been evaluated. See 'entangle'.
+--
+-- >>> (x, d) <- second (fmap prettyDemand) <$> entangleShape [1..]
+-- >>> d
+-- "_"
+-- >>> length . take 3 $ x
+-- 3
+-- >>> d
+-- "_ : _ : _ : _"
+-- >>> take 2 x
+-- [1,2]
+-- >>> d
+-- "1 : 2 : _ : _"
+entangleShape :: Shaped a => a -> IO (a, IO (Demand a))
+entangleShape = entangle' . project I
+  -- There are a two properties we care about:
+  --
+  --   1. Running the Demand action should always result in a consistent state
+  --      and not depend on when its result is forced.
+  --   2. We want to evaluate the input as little as possible. Importantly
+  --      running the demand action should never force any previously unforced
+  --      parts of the input. This is especially important for the observe
+  --      functions and the hardest thing to get right.
+  where
+    entangle' :: forall a. Shaped a => Shape a I -> IO (a, IO (Demand a))
+    entangle' s =
+      (fmap (bimap fst (fmap Wrap . traverse snd =<<)) . entangle =<<)
+      . unsafeInterleaveIO $
+      match @a s s (\flat _ ->
+        fmap (\flat' ->
+          let a :: a
+              a = embed unI . unflatten
+                  . mapFlattened @Shaped (\(WithDemand x _) -> I x)
+                  $ flat'
+              ds :: IO (Shape a Demand)
+              ds = fmap unflatten
+                   . traverseFlattened @Shaped (\(WithDemand _ d) -> d)
+                   $ flat'
+          in (a, ds))
+      . traverseFlattened @Shaped
+         ((uncurry WithDemand <$>) . entangleShape . unI)
+      $ flat)
+data WithDemand a = WithDemand a (IO (Demand a))
