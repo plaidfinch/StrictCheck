@@ -313,7 +313,8 @@ interleave p = unfold (fmap (project p)) . p
 -- @h % a@.
 unzipWith
   :: (All Functor [f, g, h], Shaped a)
-  => (forall x. f x -> (g x, h x))
+  => (forall x sx. sx ~ Shape x (Product ((%) g) ((%) h))
+        => f sx -> (g sx, h sx))
   -> (f % a -> (g % a, h % a))
 unzipWith split =
   unPair . fold (crunch . pair . split)
@@ -322,7 +323,8 @@ unzipWith split =
 -- structure
 unzipWithM
   :: (Traversable f, All Functor [g, h], Shaped a, Monad m)
-  => (forall x. f x -> m (g x, h x))
+  => (forall x sx. sx ~ Shape x (Product ((%) g) ((%) h))
+        => f sx -> m (g sx, h sx))
   -> (f % a -> m (g % a, h % a))
 unzipWithM split =
   fmap unPair . foldM (fmap (crunch . pair) . split)
