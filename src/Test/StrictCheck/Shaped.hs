@@ -313,34 +313,34 @@ interleave p = unfold (fmap (project p)) . p
 -- @h % a@.
 unzipWith
   :: (All Functor [f, g, h], Shaped a)
-  => (forall x sx. sx ~ Shape x (Product ((%) g) ((%) h))
-        => f sx -> (g sx, h sx))
+  => (forall x sx. sx ~ (Shape x ((%) g), Shape x ((%) h))
+       => f sx -> (g sx, h sx))
   -> (f % a -> (g % a, h % a))
 unzipWith split =
-  unPair . fold (crunch . pair . split)
+  unPair . fold (pair . bimap (Wrap . fmap fst) (Wrap . fmap snd)
+                 . split
+                 . fmap crunch)
 
 -- | The monadic equivalent of @unzipWith@; effectfully unzips an interleaved
 -- structure
 unzipWithM
   :: (Traversable f, All Functor [g, h], Shaped a, Monad m)
-  => (forall x sx. sx ~ Shape x (Product ((%) g) ((%) h))
-        => f sx -> m (g sx, h sx))
+  => (forall x sx. sx ~ (Shape x ((%) g), Shape x ((%) h))
+       => f sx -> m (g sx, h sx))
   -> (f % a -> m (g % a, h % a))
 unzipWithM split =
-  fmap unPair . foldM (fmap (crunch . pair) . split)
+  fmap unPair . foldM (fmap (pair . bimap (Wrap . fmap fst) (Wrap . fmap snd))
+                       . split
+                       . fmap crunch)
 
 -- Some helpers for zipping and unzipping...
 
 crunch
-  :: forall x g h.
-  (Shaped x, Functor g, Functor h)
-  => Product g h (Shape x (Product ((%) g) ((%) h)))
-  -> Product ((%) g) ((%) h) x
-crunch =
-  pair
-  . bimap (Wrap . fmap (translate (fst . unPair)))
-          (Wrap . fmap (translate (snd . unPair)))
-  . unPair
+  :: forall x g h. Shaped x
+  => Shape x (Product ((%) g) ((%) h))
+  -> (Shape x ((%) g), Shape x ((%) h))
+crunch x =
+  (translate (fst . unPair) $ x, translate (snd . unPair) $ x)
 
 pair :: (l x, r x) -> Product l r x
 pair = uncurry Pair
