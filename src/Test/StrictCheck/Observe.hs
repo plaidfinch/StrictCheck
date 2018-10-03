@@ -207,18 +207,10 @@ entangleShape ((project I -> s) :: a) =
     -- The to be entangled value with all its recursive children entangled. We
     -- still need to entangle the value itself.
     entangledChildren :: IO (a, IO (Shape a Demand))
-    entangledChildren = match s s $ \flat _ ->
-      (\(entangledFlat :: Flattened (Shape a) WithDemand xs) ->
-        ( embed unI
-          . unflatten
-          . mapFlattened @Shaped (I . demanded)
-          $ entangledFlat
-        , fmap unflatten
-          . traverseFlattened @Shaped getDemand
-          $ entangledFlat)) <$>
-        traverseFlattened @Shaped
-          (fmap (uncurry WithDemand) . entangleShape . unI)
-          flat
+    entangledChildren = (\(entangledFlat :: Shape a WithDemand) ->
+        ( embed unI . translate (I . demanded) $ entangledFlat
+        ,             translateA getDemand     $ entangledFlat) ) <$>
+      translateA (fmap (uncurry WithDemand) . entangleShape . unI) s
 
 -- Auxiliary functor for the traversal in 'entangleShape'
 data WithDemand a
