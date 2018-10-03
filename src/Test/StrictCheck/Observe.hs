@@ -57,7 +57,10 @@ import Test.StrictCheck.Demand
 observe1
   :: (Shaped a, Shaped b)
   => (b -> ()) -> (a -> b) -> a -> (Demand b, Demand a)
-observe1 context function input = unsafePerformIO $ do
+observe1 context function input =
+  -- Using unsafePerformIO here and in observeNP is safe, as the result of the
+  -- IO action only depends on it's inputs and has no side-effects.
+  unsafePerformIO $ do
   (input',  inputD)  <- entangleShape input             -- (1)
   (result', resultD) <- entangleShape (function input') -- (2)
   let !_ = context result'                              -- (3)
@@ -85,7 +88,9 @@ observeNP
   -> NP I inputs
   -> ( Demand result
      , NP Demand inputs )
-observeNP context function inputs = unsafePerformIO $ do
+observeNP context function inputs =
+  -- See the comment in observe1 about the safety of unsafePerformIO here.
+  unsafePerformIO $ do
   entangled <-
     hctraverse'
       (Proxy @Shaped)
@@ -154,6 +159,11 @@ observe context function =
 entangle :: a -> IO (a, IO (Thunk a))
 entangle a = do
   ref <- newIORef Thunk
+  -- Using unsafePerformIO here is safe, i.e. the result is referentially,
+  -- because the IO action always returns the same result the only side-effect
+  -- it has is flipping our IORef to Eval. This effect is idempotent, i.e.
+  -- executing it twice is the same as executing it once, and we actually want
+  -- it to not be executed, when its value is not forced.
   return (unsafePerformIO $ do
              writeIORef ref (Eval a)
              return a,
@@ -173,34 +183,42 @@ entangle a = do
 -- [1,2]
 -- >>> d
 -- "1 : 2 : _ : _"
+
+-- NOTE: There are a two properties we care about:
+--
+--   1. Running the Demand action should always result in a consistent state
+--      and not depend on when its result is forced.
+--   2. We want to evaluate the input as little as possible. Importantly
+--      running the demand action should never force any previously unforced
+--      parts of the input. This is especially important for the observe
+--      functions and the hardest thing to get right.
 entangleShape :: Shaped a => a -> IO (a, IO (Demand a))
-entangleShape = entangleShape' . project I
-  -- NOTE: There are a two properties we care about:
-  --
-  --   1. Running the Demand action should always result in a consistent state
-  --      and not depend on when its result is forced.
-  --   2. We want to evaluate the input as little as possible. Importantly
-  --      running the demand action should never force any previously unforced
-  --      parts of the input. This is especially important for the observe
-  --      functions and the hardest thing to get right.
+entangleShape ((project I -> s) :: a) =
+   fmap (\(~(~(a, _), da)) -> (a, Wrap <$> (traverse snd =<< da)))
+   . entangle =<<
+   -- We need to use unsafeInterleaveIO here so that we do not force the value
+   -- by matching on it when we bind the result above to entangle it.
+   --
+   -- Using unsafeInterleaveIO here is safe, as the result of the IO action does
+   -- not depend on when it is performed and it doesn't matter if it is never
+   -- performed, if it's value is not forced.
+   unsafeInterleaveIO entangledChildren
   where
-    entangleShape' :: forall a. Shaped a => Shape a I -> IO (a, IO (Demand a))
-    entangleShape' s =
-      (fmap (bimap fst (fmap Wrap . traverse snd =<<)) . entangle =<<)
-      . unsafeInterleaveIO $
-        match @a s s (\flatA _ ->
-          fmap (\flat' ->
-            let a = embed unI
-                  . unflatten
-                  . mapFlattened @Shaped (I . demanded)
-                  $ flat'
-                ds = fmap unflatten
-                   . traverseFlattened @Shaped getDemand
-                   $ flat'
-            in (a, ds))
-          . traverseFlattened @Shaped
-            ((uncurry WithDemand <$>) . entangleShape . unI)
-          $ flatA)
+    -- The to be entangled value with all its recursive children entangled. We
+    -- still need to entangle the value itself.
+    entangledChildren :: IO (a, IO (Shape a Demand))
+    entangledChildren = match @a s s $ \flat _ ->
+      (\(entangledFlat :: Flattened (Shape a) WithDemand xs) ->
+        ( embed unI
+          . unflatten
+          . mapFlattened @Shaped (I . demanded)
+          $ entangledFlat
+        , fmap unflatten
+          . traverseFlattened @Shaped getDemand
+          $ entangledFlat)) <$>
+        traverseFlattened @Shaped
+          (fmap (uncurry WithDemand) . entangleShape . unI)
+          flat
 
 -- Auxiliary functor for the traversal in 'entangleShape'
 data WithDemand a
