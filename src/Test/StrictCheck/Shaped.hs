@@ -56,6 +56,7 @@ module Test.StrictCheck.Shaped
   , unfold
   , unfoldM
   , unzipWith
+  , unzipWithM
   -- , reshape
   -- * Rendering 'Shaped' things as structured text
   , QName
@@ -316,23 +317,34 @@ unzipWith
   -> (f % a -> (g % a, h % a))
 unzipWith split =
   unPair . fold (crunch . pair . split)
-  where
-    crunch
-      :: forall x g h.
-      (Shaped x, Functor g, Functor h)
-      => Product g h (Shape x (Product ((%) g) ((%) h)))
-      -> Product ((%) g) ((%) h) x
-    crunch =
-      pair
-      . bimap (Wrap . fmap (translate @x (fst . unPair)))
-              (Wrap . fmap (translate @x (snd . unPair)))
-      . unPair
 
-    pair :: (l x, r x) -> Product l r x
-    pair = uncurry Pair
+-- | The monadic equivalent of @unzipWith@; effectfully unzips an interleaved
+-- structure
+unzipWithM
+  :: (Traversable f, All Functor [g, h], Shaped a, Monad m)
+  => (forall x. f x -> m (g x, h x))
+  -> (f % a -> m (g % a, h % a))
+unzipWithM split =
+  fmap unPair . foldM (fmap (crunch . pair) . split)
 
-    unPair :: Product l r x -> (l x, r x)
-    unPair (Pair lx rx) = (lx, rx)
+-- Some helpers for zipping and unzipping...
+
+crunch
+  :: forall x g h.
+  (Shaped x, Functor g, Functor h)
+  => Product g h (Shape x (Product ((%) g) ((%) h)))
+  -> Product ((%) g) ((%) h) x
+crunch =
+  pair
+  . bimap (Wrap . fmap (translate @x (fst . unPair)))
+          (Wrap . fmap (translate @x (snd . unPair)))
+  . unPair
+
+pair :: (l x, r x) -> Product l r x
+pair = uncurry Pair
+
+unPair :: Product l r x -> (l x, r x)
+unPair (Pair lx rx) = (lx, rx)
 
 -- | TODO: document this strange function
 {-
