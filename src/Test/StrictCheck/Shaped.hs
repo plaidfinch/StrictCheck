@@ -1,4 +1,4 @@
-{-# language InstanceSigs, DerivingStrategies #-}
+{-# language InstanceSigs, DerivingStrategies, TypeFamilyDependencies #-}
 {-# language PartialTypeSignatures #-}
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 {-| This module defines the 'Shaped' typeclass, which is used to generically
@@ -126,7 +126,7 @@ class Typeable a => Shaped (a :: *) where
   -- | The @Shape@ of an @a@ is a type isomorphic to the outermost level of
   -- structure in an @a@, parameterized by the functor @f@, which is wrapped
   -- around any fields (of any type) in the original @a@.
-  type Shape a :: (* -> *) -> *
+  type Shape a = (result :: (* -> *) -> *) | result -> a
   type Shape a = GShape a
 
   -- | Given a function to expand any @Shaped@ @x@ into an @f x@, expand an @a@
@@ -236,7 +236,7 @@ unwrap (Wrap fs) = fs
 translate :: forall a f g. Shaped a
           => (forall x. Shaped x => f x -> g x)
           -> Shape a f -> Shape a g
-translate t d = match @a d d $ \flat _ ->
+translate t d = match d d $ \flat _ ->
   unflatten $ mapFlattened @Shaped t flat
 
 -- | The 'Applicative' version of 'translate'; maps an effectful translation
@@ -244,7 +244,7 @@ translate t d = match @a d d $ \flat _ ->
 translateA :: forall a c f g. (Shaped a, Applicative c)
            => (forall x. Shaped x => f x -> c (g x))
            -> Shape a f -> c (Shape a g)
-translateA t d = match @a d d $ \flat _ ->
+translateA t d = match d d $ \flat _ ->
   unflatten <$> traverseFlattened @Shaped t flat
 
 -- | The equivalent of a fold (catamorphism) over recursively 'Shaped' values
@@ -254,13 +254,13 @@ translateA t d = match @a d d $ \flat _ ->
 fold :: forall a f g. (Functor f, Shaped a)
      => (forall x. Shaped x => f (Shape x g) -> g x)
      -> f % a -> g a
-fold alg = alg . fmap (translate @a (fold alg)) . unwrap
+fold alg = alg . fmap (translate (fold alg)) . unwrap
 
 -- | The 'Monad' version of 'fold'; folds an interleaved structure effectfully.
 foldM :: forall a m f g. (Traversable f, Shaped a, Monad m)
       => (forall x. Shaped x => f (Shape x g) -> m (g x))
       -> f % a -> m (g a)
-foldM alg = alg <=< traverse (translateA @a (foldM alg)) . unwrap
+foldM alg = alg <=< traverse (translateA (foldM alg)) . unwrap
 
 -- | The equivalent of an unfold (anamorphism) over recursively 'Shaped' values
 --
@@ -269,14 +269,14 @@ foldM alg = alg <=< traverse (translateA @a (foldM alg)) . unwrap
 unfold :: forall a f g. (Functor g, Shaped a)
        => (forall x. Shaped x => f x -> g (Shape x f))
        -> f a -> g % a
-unfold coalg = Wrap . fmap (translate @a (unfold coalg)) . coalg
+unfold coalg = Wrap . fmap (translate (unfold coalg)) . coalg
 
 -- | The 'Monad' version of 'unfold'; unfolds an interleaved structure
 -- effectfully.
 unfoldM :: forall a m f g. (Traversable g, Shaped a, Monad m)
          => (forall x. Shaped x => f x -> m (g (Shape x f)))
          -> f a -> m (g % a)
-unfoldM coalg = fmap Wrap . traverse (translateA @a (unfoldM coalg)) <=< coalg
+unfoldM coalg = fmap Wrap . traverse (translateA (unfoldM coalg)) <=< coalg
 
 -- TODO: mapM, foldM, unfoldM, ...
 
@@ -336,8 +336,8 @@ crunch
   -> Product ((%) g) ((%) h) x
 crunch =
   pair
-  . bimap (Wrap . fmap (translate @x (fst . unPair)))
-          (Wrap . fmap (translate @x (snd . unPair)))
+  . bimap (Wrap . fmap (translate (fst . unPair)))
+          (Wrap . fmap (translate (snd . unPair)))
   . unPair
 
 pair :: (l x, r x) -> Product l r x
@@ -357,7 +357,7 @@ reshape homo hetero d =
     Nothing    -> hetero d
     Just HRefl ->
       Wrap
-      $ homo . fmap (translate @a (reshape @b homo hetero))
+      $ homo . fmap (translate (reshape homo hetero))
       $ unwrap d
 -}
 
@@ -375,7 +375,7 @@ renderfold = unK . fold oneLevel
     oneLevel :: forall x. Shaped x
              => f (Shape x (K (Rendered f)))
              -> K (Rendered f) x
-    oneLevel = K . RWrap . fmap (render @x)
+    oneLevel = K . RWrap . fmap render
 
 -- | A @QName@ is a qualified name
 --

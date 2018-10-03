@@ -207,7 +207,7 @@ entangleShape ((project I -> s) :: a) =
     -- The to be entangled value with all its recursive children entangled. We
     -- still need to entangle the value itself.
     entangledChildren :: IO (a, IO (Shape a Demand))
-    entangledChildren = match @a s s $ \flat _ ->
+    entangledChildren = match s s $ \flat _ ->
       (\(entangledFlat :: Flattened (Shape a) WithDemand xs) ->
         ( embed unI
           . unflatten
