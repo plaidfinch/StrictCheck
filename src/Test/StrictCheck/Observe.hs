@@ -20,7 +20,6 @@ import Data.Functor.Product
 import Data.Functor.Compose
 import Data.IORef
 import System.IO.Unsafe
-import Control.Monad
 
 import Generics.SOP hiding (Shape, Compose)
 
@@ -62,10 +61,10 @@ observe1 context function input =
   -- Using unsafePerformIO here and in observeNP is safe, as the result of the
   -- IO action only depends on it's inputs and has no side-effects.
   unsafePerformIO $ do
-  (input',  inputD)  <- entangleShape input             -- (1)
-  (result', resultD) <- entangleShape (function input') -- (2)
-  let !_ = context result'                              -- (3)
-  (,) <$> resultD <*> inputD                            -- (4)
+    (input',  inputD)  <- entangleShape input             -- (1)
+    (result', resultD) <- entangleShape (function input') -- (2)
+    let !_ = context result'                              -- (3)
+    (,) <$> resultD <*> inputD                            -- (4)
 
 -- | Observe the demand behavior
 --
@@ -90,19 +89,30 @@ observeNP
   -> ( Demand result
      , NP Demand inputs )
 observeNP context function inputs =
-  -- See the comment in observe1 about the safety of unsafePerformIO here.
+  -- NOTE: See the comment in observe1 about the safety of unsafePerformIO here.
   unsafePerformIO $ do
-  entangled <-
-    hctraverse'
-      (Proxy @Shaped)
-      (fmap (uncurry Pair . bimap I Compose) . entangleShape . unI)
-      inputs
-  let (inputs', inputsD) =
-        (hliftA     (\(Pair r _) -> r           ) entangled,
-         htraverse' (\(Pair _ l) -> getCompose l) entangled)
-  (result', resultD) <- entangleShape (function inputs')
-  let !_ = context result'
-  (,) <$> resultD <*> inputsD
+    -- This function works identically to observe1, except it has more
+    -- line-noise to shuffle around newtypes and traverse heterogeneous lists.
+    -- To see this, compare the numbered comments below to their corresponding
+    -- line labels in observe1.
+
+    -- (1) instrument the inputs
+    entangled <-
+      hctraverse'
+        (Proxy @Shaped)
+        (fmap (uncurry Pair . bimap I Compose) . entangleShape . unI)
+        inputs
+    let inputs' = hliftA     (\(Pair r _) -> r           ) entangled
+    let inputsD = htraverse' (\(Pair _ l) -> getCompose l) entangled
+
+    -- (2) instrument the result of the function on the instrumented inputs
+    (result', resultD) <- entangleShape (function inputs')
+
+    -- (3) evaluate the function in the context
+    let !_ = context result'
+
+    -- (4) return the resultant observed demands
+    (,) <$> resultD <*> inputsD
 
 -- | Observe the demand behavior
 --
