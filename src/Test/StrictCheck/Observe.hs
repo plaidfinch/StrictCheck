@@ -20,8 +20,9 @@ import Data.Functor.Product
 import Data.Functor.Compose
 import Data.IORef
 import System.IO.Unsafe
+import Control.Monad
 
-import Generics.SOP hiding (Shape)
+import Generics.SOP hiding (Shape, Compose)
 
 import Test.StrictCheck.Curry hiding (curry, uncurry)
 import Test.StrictCheck.Shaped
@@ -192,25 +193,27 @@ entangle a = do
 --      running the demand action should never force any previously unforced
 --      parts of the input. This is especially important for the observe
 --      functions and the hardest thing to get right.
-entangleShape :: Shaped a => a -> IO (a, IO (Demand a))
-entangleShape ((project I -> s) :: a) =
-   fmap (\(~(~(a, _), da)) -> (a, Wrap <$> (traverse snd =<< da)))
-   . entangle =<<
+entangleShape :: forall a. Shaped a => a -> IO (a, IO (Demand a))
+entangleShape a = do
    -- We need to use unsafeInterleaveIO here so that we do not force the value
    -- by matching on it when we bind the result above to entangle it.
    --
    -- Using unsafeInterleaveIO here is safe, as the result of the IO action does
    -- not depend on when it is performed and it doesn't matter if it is never
    -- performed, if it's value is not forced.
-   unsafeInterleaveIO entangledChildren
+   (~(~(a', _), da)) <- entangle =<< unsafeInterleaveIO entangledFields
+   return (a', Wrap <$> (traverse snd =<< da))
   where
     -- The to be entangled value with all its recursive children entangled. We
     -- still need to entangle the value itself.
-    entangledChildren :: IO (a, IO (Shape a Demand))
-    entangledChildren = (\(entangledFlat :: Shape a WithDemand) ->
-        ( embed unI . translate (I . demanded) $ entangledFlat
-        ,             translateA getDemand     $ entangledFlat) ) <$>
-      translateA (fmap (uncurry WithDemand) . entangleShape . unI) s
+    entangledFields :: IO (a, IO (Shape a Demand))
+    entangledFields = do
+      entangled <- translateA (pairWithDemand . unI) (project I a)
+      let a' = embed unI (translate (I . demanded) entangled)
+      return (a', translateA getDemand entangled)
+
+    pairWithDemand :: forall x. Shaped x => x -> IO (WithDemand x)
+    pairWithDemand = fmap (uncurry WithDemand) . entangleShape
 
 -- Auxiliary functor for the traversal in 'entangleShape'
 data WithDemand a
