@@ -278,8 +278,6 @@ unfoldM :: forall a m f g. (Traversable g, Shaped a, Monad m)
          -> f a -> m (g % a)
 unfoldM coalg = fmap Wrap . traverse (translateA (unfoldM coalg)) <=< coalg
 
--- TODO: mapM, ...
-
 -- | Fuse the interleaved @f@-structure out of a recursively interleaved @f %
 -- a@, given some way of fusing a single level @f x -> x@.
 --
