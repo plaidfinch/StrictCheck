@@ -12,7 +12,7 @@ and this project adheres to the [Haskell Package Versioning Policy](https://pvp.
 - Expose instrumentation of data structures as a safe interface in the `IO` monad.
 - Add monadic folds and unfolds `translateA`, `foldM`, `unfoldM`, and `unzipWithM` to `Test.StrictCheck.Shaped`.
 
-## Removed
+### Removed
 
 - Remove the referentially opaque observation primitives in `Test.StrictCheck.Unsafe`.
 
