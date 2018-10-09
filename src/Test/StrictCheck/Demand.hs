@@ -58,7 +58,7 @@ import Test.StrictCheck.Internal.Unevaluated
 data Thunk a
   = Eval !a
   | Thunk
-  deriving (Eq, Ord, Show, Functor, GHC.Generic)
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable, GHC.Generic)
 
 instance Applicative Thunk where
   pure = Eval

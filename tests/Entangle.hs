@@ -8,8 +8,8 @@ spec :: IO ()
 spec = do
   putStrLn "Checking entangleShape"
   _ <- runTestTT . test $ do
-    (x , d ) <- fmap (fmap prettyDemand) <$> entangleShape ()
-    (x', d') <- fmap (fmap prettyDemand) <$> entangleShape x
+    (x , d ) <- fmap (fmap prettyDemand) <$> instrument ()
+    (x', d') <- fmap (fmap prettyDemand) <$> instrument x
     d1 <- d
     d1 @=? "_"
     d'1 <- d'
