@@ -19,7 +19,6 @@ module Test.StrictCheck.Internal.Inputs
   ) where
 
 import Test.QuickCheck (Gen)
-import Data.Semigroup
 
 
 --------------------------------------------------
