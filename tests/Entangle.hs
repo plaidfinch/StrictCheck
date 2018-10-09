@@ -6,7 +6,7 @@ import Data.Bifunctor (bimap)
 
 spec :: IO ()
 spec = do
-  putStrLn "Checking entangleShape"
+  putStrLn "Checking instrument"
   _ <- runTestTT . test $ do
     (x , d ) <- fmap (fmap prettyDemand) <$> instrument ()
     (x', d') <- fmap (fmap prettyDemand) <$> instrument x
