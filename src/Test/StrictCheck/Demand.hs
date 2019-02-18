@@ -265,16 +265,23 @@ showPrettyFieldThunkS qualifyNames t prec (RWrap (Eval pd)) =
     foldMapCompose :: (a -> (b -> b)) -> [a] -> (b -> b)
     foldMapCompose f = appEndo . foldMap (Endo . f)
 
+-- | Pretty-print a demand for display, given the precendence context
+prettyDemandPrec :: Shaped a => Int -> Demand a -> ShowS
+prettyDemandPrec prec d =
+  showPrettyFieldThunkS False "_" prec (renderfold d)
+
 -- | Pretty-print a demand for display
 prettyDemand :: Shaped a => Demand a -> String
-prettyDemand d =
-  showPrettyFieldThunkS False "_" 0 (renderfold d) ""
+prettyDemand d = prettyDemandPrec 0 d ""
 
 -- | Print a demand to standard output
 --
 -- > printDemand = putStrLn . prettyDemand
 printDemand :: Shaped a => Demand a -> IO ()
 printDemand = putStrLn . prettyDemand
+
+instance Shaped a => Show (Demand a) where
+  showsPrec = prettyDemandPrec
 
 -- TODO: Comparisons module?
 
