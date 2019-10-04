@@ -11,22 +11,17 @@ module Test.StrictCheck.Observe
   ( observe1
   , observe
   , observeNP
-  , instrument
-  , entangle
   ) where
 
 import Data.Bifunctor
 import Data.Functor.Product
-import Data.Functor.Compose
-import Data.IORef
-import System.IO.Unsafe (unsafePerformIO, unsafeInterleaveIO)
 
-import Generics.SOP hiding (Shape, Compose)
+import Generics.SOP hiding (Shape)
 
 import Test.StrictCheck.Curry hiding (curry, uncurry)
 import Test.StrictCheck.Shaped
+import Test.StrictCheck.Observe.Unsafe
 import Test.StrictCheck.Demand
-
 
 ------------------------------------------------------
 -- Observing demand behavior of arbitrary functions --
@@ -55,27 +50,17 @@ import Test.StrictCheck.Demand
 -- This tells us that our context did indeed evaluate the result of @reverse@
 -- to force only its first constructor, and that doing so required the entire
 -- spine of the list to be evaluated, but did not evaluate any of its elements.
-
+{-# NOINLINE observe1 #-}
 observe1
   :: (Shaped a, Shaped b)
   => (b -> ()) -> (a -> b) -> a -> (Demand b, Demand a)
 observe1 context function input =
-  -- Using unsafePerformIO here and in observeNP is safe, as the result of the
-  -- IO action only depends on it's inputs and has no side-effects.
-  unsafePerformIO $ do
-
-    -- The numbered lines correspond to the NOTE below
-    (input',  inputD)  <- instrument input                -- (1)
-    (result', resultD) <- instrument (function input')    -- (2)
-    let !_ = context result'                              -- (3)
-    (,) <$> resultD <*> inputD                            -- (4)
-
-    -- NOTE: The observation function:
-    -- (1) instruments the input
-    -- (2) instruments the result of the function applied to the input
-    -- (3) evaluates the instrumented result of the function in the context, and
-    -- (4) returns the observed demands on the result and the input.
-
+  let (input', inputD)  =
+        entangleShape input              -- (1)
+      (result', resultD) =
+        entangleShape (function input')  -- (2)
+  in let !_ = context result'            -- (3)
+  in (resultD, inputD)                   -- (4)
 
 -- | Observe the demand behavior
 --
@@ -92,7 +77,7 @@ observe1 context function input =
 --
 -- This is mostly useful for implementing the internals of StrictCheck;
 -- 'observe' is more ergonomic for exploration by end-users.
-
+{-# NOINLINE observeNP #-}
 observeNP
   :: (All Shaped inputs, Shaped result)
   => (result -> ())
@@ -101,31 +86,17 @@ observeNP
   -> ( Demand result
      , NP Demand inputs )
 observeNP context function inputs =
-  -- NOTE: See the comment in observe1 about the safety of unsafePerformIO here.
-  unsafePerformIO $ do
-    -- This function works identically to observe1, except it has more
-    -- line-noise to shuffle around newtypes and traverse heterogeneous lists.
-    -- To see this, compare the numbered comments below to their corresponding
-    -- line labels in observe1.
-
-    -- (1) instrument the inputs
-    entangled <-
-      hctraverse'
-        (Proxy @Shaped)
-        (fmap (uncurry Pair . bimap I Compose) . instrument . unI)
-        inputs
-    let inputs' = hliftA     (\(Pair r _) -> r           ) entangled
-    let inputsD = htraverse' (\(Pair _ l) -> getCompose l) entangled
-
-    -- (2) instrument the result of the function on the instrumented inputs
-    (result', resultD) <- instrument (function inputs')
-
-    -- (3) evaluate the instrumented result of the function in the context
-    let !_ = context result'
-
-    -- (4) return the resultant observed demands
-    (,) <$> resultD <*> inputsD
-
+  let entangled =
+        hcliftA
+          (Proxy @Shaped)
+          (uncurry Pair . first I . entangleShape . unI)
+          inputs
+      (inputs', inputsD) =
+        (hliftA (\(Pair r _) -> r) entangled,
+          hliftA (\(Pair _ l) -> l) entangled)
+      (result', resultD) = entangleShape (function inputs')
+  in let !_ = context result'
+  in (resultD, inputsD)
 
 -- | Observe the demand behavior
 --
@@ -156,7 +127,6 @@ observeNP context function inputs =
 --
 -- If you haven't thought very carefully about the strictness behavior of @zip@,
 -- this may be a surprising result; this is part of the fun!
-
 observe
   :: ( All Shaped (Args function)
      , Shaped (Result function)
@@ -169,82 +139,4 @@ observe
 observe context function =
   curryAll (observeNP context (uncurryAll function))
 
-
---------------------------------------------------------
--- Instrumenting values to determine their evaluation --
---------------------------------------------------------
-
--- | Creates a tuple of an instrumented thunk, and an @IO@ action whose return
--- value indicates whether that thunk has yet been evaluated.
---
--- >>> (x, d) <- entangle ()
--- >>> d
--- Thunk
--- >>> x
--- ()
--- >>> d
--- Eval ()
-
-entangle :: a -> IO (a, IO (Thunk a))
-entangle a = do
-  ref <- newIORef Thunk
-  -- Using unsafePerformIO here is safe, i.e. it is referentially transparent,
-  -- because the only handle to the mutated IORef is closed over by the IO
-  -- action returned as the second element of the resultant tuple, which means
-  -- the effect of the unsafePerformIO can only be observed from within IO.
-  return (unsafePerformIO $ do
-             writeIORef ref (Eval a)
-             return a,
-          readIORef ref)
-
--- | Recursively instruments a value, returning a tuple of an instrumented
--- value, and an @IO@ action returning a 'Demand' that corresponds to the
--- portion of the instrumented value which has already been evaluated at the
--- time the action was run.
---
--- >>> (x, d) <- instrument [1..]
--- >>> printDemand =<< d
--- _
--- >>> length . take 3 $ x
--- 3
--- >>> printDemand =<< d
--- _ : _ : _ : _
--- >>> take 2 x
--- [1,2]
--- >>> printDemand =<< d
--- 1 : 2 : _ : _
-
--- NOTE: There are a two properties we care about:
---
---   1. Running the Demand action should always result in a consistent state
---      and not depend on when its result is forced.
---   2. We want to evaluate the input as little as possible. Importantly
---      running the demand action should never force any previously unforced
---      parts of the input. This is especially important for the observe
---      functions and the hardest thing to get right.
-
-instrument :: forall a. Shaped a => a -> IO (a, IO (Demand a))
-instrument a = do
-   -- We need to use unsafeInterleaveIO here so that we do not force the value
-   -- by matching on it when we bind the result above to entangle it.
-   --
-   -- Using unsafeInterleaveIO here is safe, as the result of the IO action does
-   -- not depend on when it is performed and it doesn't matter if it is never
-   -- performed, if it's value is not forced.
-   (~(~(a', _), da)) <- entangle =<< unsafeInterleaveIO entangledFields
-   return (a', Wrap <$> (traverse snd =<< da))
-  where
-    -- The to-be-entangled value with all its recursive children entangled
-    -- We still need to entangle the value itself
-    entangledFields :: IO (a, IO (Shape a Demand))
-    entangledFields = do
-      entangled <- translateA (pairWithDemand . unI) (project I a)
-      let a' = embed unI (translate (I . demanded) entangled)
-      return (a', translateA getDemand entangled)
-
-    pairWithDemand :: forall x. Shaped x => x -> IO (WithDemand x)
-    pairWithDemand = fmap (uncurry WithDemand) . instrument
-
--- Auxiliary functor for the traversal in 'instrument'
-data WithDemand a
-  = WithDemand { demanded :: a, getDemand :: IO (Demand a) }
+-- NOTE: We don't need a NOINLINE annotation here because this wraps observeNP.

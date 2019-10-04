@@ -1,6 +1,6 @@
 name:                StrictCheck
-version:             0.2.0
-synopsis:            Keep Your Laziness In Check
+version:             0.1.1
+synopsis:            StrictCheck: Keep Your Laziness In Check
 description: StrictCheck is a property-based random testing framework for
              observing, specifying, and testing the strictness behaviors of Haskell
              functions. Strictness behavior is traditionally considered a non-functional
@@ -33,6 +33,7 @@ library
                        Test.StrictCheck.Produce,
                        Test.StrictCheck.Demand,
                        Test.StrictCheck.Observe,
+                       Test.StrictCheck.Observe.Unsafe,
                        Test.StrictCheck.Shaped,
                        Test.StrictCheck.Shaped.Flattened,
                        Test.StrictCheck.Internal.Inputs,
@@ -50,8 +51,7 @@ library
                        DeriveAnyClass, TypeOperators, PolyKinds,
                        GeneralizedNewtypeDeriving,
                        ViewPatterns, LambdaCase, TupleSections, ImplicitParams,
-                       NamedFieldPuns, PatternSynonyms,
-                       DeriveFoldable, DeriveTraversable
+                       NamedFieldPuns, PatternSynonyms
   ghc-options:         -Wall -Wno-unticked-promoted-constructors
                        -Wredundant-constraints
 
