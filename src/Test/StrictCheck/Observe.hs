@@ -59,8 +59,14 @@ observe1 context function input =
         instrument input              -- (1)
       (result', resultD) =
         instrument (function input')  -- (2)
-  in let !_ = context result'            -- (3)
-  in (resultD, inputD)                   -- (4)
+  in let !_ = context result'         -- (3)
+  in (resultD, inputD)                -- (4)
+  
+  -- NOTE: The observation function:
+  -- (1) instruments the input
+  -- (2) instruments the result of the function applied to the input
+  -- (3) evaluates the instrumented result of the function in the context, and
+  -- (4) returns the observed demands on the result and the input.
 
 -- | Observe the demand behavior
 --
