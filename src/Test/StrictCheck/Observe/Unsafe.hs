@@ -64,9 +64,9 @@ entangle a =
 -- corresponding @Demand@ happen at the same time. In StrictCheck, all
 -- evaluation of the entangled value occurs before any evaluation of the
 -- @Demand@; we never interleave their evaluation.
-{-# NOINLINE entangleShape #-}
-entangleShape :: Shaped a => a -> (a, Demand a)
-entangleShape =
+{-# NOINLINE instrument #-}
+instrument :: Shaped a => a -> (a, Demand a)
+instrument =
   first (fuse unI)
   . unzipWith entangle'
   . interleave I

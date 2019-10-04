@@ -62,9 +62,6 @@ module Test.StrictCheck
   )
   where
 
-
--- TODO: IMPORTANT: Add short descriptions to Haddock module headers
-
 import Test.StrictCheck.Curry as Curry
 import Test.StrictCheck.Produce
 import Test.StrictCheck.Consume

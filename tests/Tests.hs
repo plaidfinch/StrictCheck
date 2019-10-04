@@ -2,7 +2,6 @@ module Main where
 
 import Specs
 import RefTrans
-import qualified Entangle
 
 main :: IO ()
 main = do
@@ -10,4 +9,3 @@ main = do
   runSpecs
   -- regression test for issue #2 (CSE breaks referential transparency)
   checkRefTrans
-  Entangle.spec
