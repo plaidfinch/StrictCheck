@@ -644,7 +644,7 @@ gRender :: forall a x. (HasDatatypeInfo a, GShaped a)
          => Shape a (K x) -> RenderLevel x
 gRender (GS demand) =
   case info of
-    ADT m d cs ->
+    ADT m d cs s ->
       renderC m d demand cs
     Newtype m d c ->
       renderC m d demand (c :* Nil)
