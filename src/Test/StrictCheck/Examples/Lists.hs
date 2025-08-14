@@ -10,7 +10,7 @@
 module Test.StrictCheck.Examples.Lists where
 
 import Test.StrictCheck
-import Data.Functor
+import Data.Functor (($>))
 
 -- * Specifying some simple functions on lists
 
