@@ -20,6 +20,12 @@ length_spec =
   Spec $ \predict _ xs ->
     predict (xs $> thunk)
 
+-- | An incorrect specification for 'length' (to test the pretty printer)
+bad_length_spec :: Spec '[[a]] Int
+bad_length_spec =
+  Spec $ \predict _ xs ->
+    predict (take 1 xs $> thunk)
+
 -- | A naive specification for 'take', which is wrong
 take_spec_too_easy :: Spec '[Int, [a]] [a]
 take_spec_too_easy =
