@@ -80,8 +80,5 @@ test-suite test-strictcheck
                         PatternSynonyms
   ghc-options:         -Wall -fno-warn-unused-imports -O2
   build-depends:        base,
-                        HUnit,
-                        generics-sop,
-                        deepseq,
                         StrictCheck,
                         QuickCheck
