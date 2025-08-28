@@ -91,7 +91,7 @@ import Data.Kind (Type)
 import Generics.SOP hiding ( Shape )
 
 import Data.Complex
--- import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty(..))
 
 import Test.StrictCheck.Shaped.Flattened
 
@@ -751,9 +751,7 @@ instance (Typeable a, Eq a, Show a) => Shaped (Complex a) where
   match   = matchPrim
   render  = renderPrim
 
--- instance Generic (NonEmpty a)
--- instance HasDatatypeInfo (NonEmpty a)
--- instance Shaped a => Shaped (NonEmpty a) where
+instance Shaped a => Shaped (NonEmpty a) where
 
 -- Tree
 -- Map k
