@@ -34,6 +34,7 @@ import Test.StrictCheck.Curry
 
 import Generics.SOP
 import Data.Complex
+import Data.List.NonEmpty (NonEmpty(..))
 
 -------------------------------------------------------
 -- The user interface for creating Produce instances --
@@ -225,3 +226,6 @@ instance (Produce a) => Produce [a] where
               , (1, (:) <$> recur
                         <*> recur)
               ]
+
+instance Produce a => Produce (NonEmpty a) where
+  produce = (:|) <$> recur <*> recur
