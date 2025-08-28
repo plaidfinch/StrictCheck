@@ -36,7 +36,7 @@ module Test.StrictCheck.Demand
 
 import qualified Control.Exception as Exception
 import qualified GHC.Generics as GHC
-import Control.Applicative
+import Control.Applicative (liftA2) -- for GHC 9.2
 import Data.Bifunctor
 import System.IO.Unsafe
 import Data.Monoid ( Endo(..) )

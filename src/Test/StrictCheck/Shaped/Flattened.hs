@@ -22,8 +22,8 @@ import Generics.SOP
 -- a value @d h@ for any @h@, given an n-ary product with matching field types
 -- to the one contained here.
 --
--- Pay attention to the kinds! @d :: (* -> *) -> *@, @f :: * -> *@, and
--- @xs :: [*]@.
+-- Pay attention to the kinds! @d :: (Type -> Type) -> Type@, @f :: Type -> Type@,
+-- and @xs :: [Type]@.
 --
 -- For types which are literally a collection of fields with no extra
 -- information, the reconstruction function merely converts the given list of
