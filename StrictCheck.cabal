@@ -11,7 +11,7 @@ homepage:            https://github.com/kwf/StrictCheck#readme
 license:             MIT
 license-file:        LICENSE
 author:              Kenneth Foner, Hengchu Zhang, and Leo Lampropoulos
-maintainer:          kwf@very.science
+maintainer:          lysxia@gmail.com
 copyright:           (c) 2018 Kenneth Foner, Hengchu Zhang, and Leo Lampropoulos
 category:            Testing
 build-type:          Simple
