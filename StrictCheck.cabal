@@ -11,12 +11,13 @@ homepage:            https://github.com/kwf/StrictCheck#readme
 license:             MIT
 license-file:        LICENSE
 author:              Kenneth Foner, Hengchu Zhang, and Leo Lampropoulos
-maintainer:          kwf@very.science
+maintainer:          lysxia@gmail.com
 copyright:           (c) 2018 Kenneth Foner, Hengchu Zhang, and Leo Lampropoulos
 category:            Testing
 build-type:          Simple
 cabal-version:       >=1.10
 extra-source-files:  README.md
+tested-with:         GHC == 9.12.2, GHC == 9.6.7, GHC == 9.2.8
 
 source-repository this
   type: git
@@ -32,7 +33,7 @@ library
                        containers       >= 0.5   && < 0.9,
                        generics-sop     >= 0.3.2 && < 0.6,
                        bifunctors       >= 5.5   && < 5.7,
-                       template-haskell >= 2.12  && < 2.24
+                       template-haskell >= 2.18  && < 2.24
   exposed-modules:     Test.StrictCheck
                        Test.StrictCheck.Curry,
                        Test.StrictCheck.Consume,
@@ -79,8 +80,5 @@ test-suite test-strictcheck
                         PatternSynonyms
   ghc-options:         -Wall -fno-warn-unused-imports -O2
   build-depends:        base,
-                        HUnit,
-                        generics-sop,
-                        deepseq,
                         StrictCheck,
                         QuickCheck

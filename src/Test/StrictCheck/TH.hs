@@ -75,13 +75,13 @@ constructor2PatternDec ty idx (NormalC conName argTypes) = do
 constructor2PatternDec ty idx (InfixC argType1 conName argType2) = do
   let argTypes = [argType1, argType2]
   (npPat, names) <- productPattern (map snd argTypes)
-  when (length names /= 2) $
-    reportError "The impossible happened: Infix Pattern have more than 2 binders"
-  let nm1 : nm2 : _ = names
-  return
-    ( PatSynSigD patDecName (patternTypeDec (map snd argTypes) ty),
-      infixPatternDec idx patDecName nm1 nm2 npPat
-    )
+  case names of
+    nm1 : nm2 : [] ->
+      return
+        ( PatSynSigD patDecName (patternTypeDec (map snd argTypes) ty),
+          infixPatternDec idx patDecName nm1 nm2 npPat
+        )
+    _ -> fail "The impossible happened: Infix Pattern have more than 2 binders"
   where
     patDecName = mkName (nameBase conName ++ "%")
 constructor2PatternDec _ _ _ =
