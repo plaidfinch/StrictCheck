@@ -167,9 +167,9 @@ draws inputs = go [inputs]
     pick :: [a] -> Gen (a, [a])
     pick as = do
       index <- choose (0, length as - 1)
-      let (before, picked : after) = splitAt index as
-      return (picked, before ++ after)
-
+      case splitAt index as of
+        (before, picked : after) -> return (picked, before ++ after)
+        _ -> error "pick: empty list"
 
 
 ---------------------------------------------
