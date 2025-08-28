@@ -6,6 +6,10 @@ import Test.StrictCheck
 import Test.StrictCheck.Examples.Lists
 import Test.StrictCheck.Examples.Map
 
+import Control.Monad (when)
+import GHC.IO.Encoding (textEncodingName)
+import System.IO
+
 runSpecs :: IO ()
 runSpecs = do
   putStrLn "Checking length_spec..."
@@ -35,4 +39,11 @@ runSpecs = do
     iterSolution_spec
     iterSolutionWithKey >>= print
 
-  return ()
+  putStrLn "Checking bad_length_spec (failure is expected!)..."
+  strictCheckSpecExact bad_length_spec (length :: [Int] -> Int)
+
+  enc <- hGetEncoding stdout
+  when (fmap textEncodingName enc == Just "UTF-8") $ do
+    hSetEncoding stdout latin1
+    putStrLn "Checking bad_length_spec without Unicode output (failure is expected!)..."
+    strictCheckSpecExact bad_length_spec (length :: [Int] -> Int)

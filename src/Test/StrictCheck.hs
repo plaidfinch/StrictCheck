@@ -78,9 +78,13 @@ import Generics.SOP hiding (Shape)
 import Test.QuickCheck as Exported hiding (Args, Result, function)
 import qualified Test.QuickCheck as QC
 
+import Data.Char (ord)
+import Data.Function (on)
 import Data.List
 import Data.Maybe
 import Data.IORef
+import GHC.IO.Encoding (textEncodingName)
+import qualified System.IO as IO
 import Type.Reflection
 
 -- | The default comparison of demands: exact equality
@@ -295,8 +299,16 @@ strictCheckSpecExact spec function =
      (putStrLn . head . lines) (output result)
      case maybeExample of
        Nothing -> return ()
-       Just example ->
-         putStrLn (Prelude.uncurry displayCounterSpec example)
+       Just example -> do
+         unicode <- doesStdoutAcceptUnicode
+         putStrLn (Prelude.uncurry (displayCounterSpec unicode) example)
+
+doesStdoutAcceptUnicode :: IO Bool
+doesStdoutAcceptUnicode = do
+  encoding <- IO.hGetEncoding IO.stdout
+  case encoding of
+    Nothing -> pure False
+    Just enc -> pure (any (((==) `on` textEncodingName) enc) [IO.utf8, IO.utf8_bom, IO.utf16, IO.utf16le, IO.utf16be, IO.utf32, IO.utf32le, IO.utf32be])
 
 ------------------------------------------------------------
 -- An Evaluation is what we generate when StrictCheck-ing --
@@ -400,53 +412,94 @@ shrinkEvalWith
              T     -> Nothing
              E pos -> Just pos
 
+-- | If 'False' (unicode output is disabled), replace all non-ASCII characters with '?'.
+sanitize :: Bool -> String -> String
+sanitize True = id
+sanitize False = fmap (\c -> if ord c < 128 then c else '?')
 
 -- | Render a counter-example to a specification (that is, an 'Evaluation'
--- paired with some expected input demands it doesn't match) as a Unicode
--- box-drawing sketch
+-- paired with some expected input demands it doesn't match) as a
+-- box-drawing sketch (in Unicode or ASCII depending on whether the
+-- first argument is 'True' or 'False')
 displayCounterSpec
   :: forall args result.
   (Shaped result, All Shaped args)
-  => Evaluation args result
+  => Bool  -- ^ 'True' to enable prettier Unicode output
+  -> Evaluation args result
   -> NP Demand args
   -> String
-displayCounterSpec (Evaluation inputs inputsD resultD) predictedInputsD =
-  beside inputBox ("   " : "───" : repeat "   ") resultBox
+displayCounterSpec unicode (Evaluation inputs inputsD resultD) predictedInputsD =
+  sanitize unicode $
+  beside inputBox ("   " : threeDashes : repeat "   ") resultBox
   ++ (flip replicate ' ' $
        (2 `max` (subtract 2 $ (lineMax [inputString] `div` 2))))
-  ++ "🡓 🡓 🡓\n"
+  ++ threeArrows
   ++ beside
        actualBox
-       ("       " : "       " : "  ═╱═  " : repeat "       ")
+       ("       " : "       " : notEqual : repeat "       ")
        predictedBox
   where
-    inputBox =
+    threeDashes | unicode = "───"
+                | otherwise = "---"
+    threeArrows | unicode = "🡓 🡓 🡓\n"
+                | otherwise = "v v v\n"
+    notEqual | unicode = "  ═╱═  "
+             | otherwise = "  =/=  "
+    inputBox
+      | unicode =
       box "┌" '─'         "┐"
           "│" inputHeader "├"
           "├" '─'         "┤"
           "│" inputString "│"
           "└" '─'         "┘"
+      | otherwise =
+      box "+" '-'         "+"
+          "|" inputHeader "+"
+          "+" '-'         "+"
+          "|" inputString "|"
+          "+" '-'         "+"
 
-    resultBox =
+    resultBox
+      | unicode =
       box "┌" '─'          "┐"
           "┤" resultHeader "│"
           "├" '─'          "┤"
           "│" resultString "│"
           "└" '─'          "┘"
+      | otherwise =
+      box "+" '-'          "+"
+          "+" resultHeader "|"
+          "+" '-'          "+"
+          "|" resultString "|"
+          "+" '-'          "+"
 
-    actualBox =
+    actualBox
+      | unicode =
       box "┌" '─'                "┐"
           "│" actualHeader       "│"
           "├" '─'                "┤"
           "│" actualDemandString "│"
           "└" '─'                "┘"
+      | otherwise =
+      box "+" '-'                "+"
+          "|" actualHeader       "|"
+          "+" '-'                "+"
+          "|" actualDemandString "|"
+          "+" '-'                "+"
 
-    predictedBox =
+    predictedBox
+      | unicode =
       box "┌" '─'                   "┐"
           "│" predictedHeader       "│"
           "├" '─'                   "┤"
           "│" predictedDemandString "│"
           "└" '─'                   "┘"
+      | otherwise =
+      box "+" '-'                   "+"
+          "|" predictedHeader       "|"
+          "+" '-'                   "+"
+          "|" predictedDemandString "|"
+          "+" '-'                   "+"
 
     inputHeader = " Input" ++ plural
     resultHeader = " Demand on result"
@@ -511,4 +564,6 @@ displayCounterSpec (Evaluation inputs inputsD resultD) predictedInputsD =
         showNPWith' :: forall ys. All c ys => NP g ys -> String
         showNPWith'      Nil = ""
         showNPWith' (y :* ys) =
-          " • " ++ display y ++ "\n" ++ showNPWith' ys
+          bullet ++ display y ++ "\n" ++ showNPWith' ys
+    bullet | unicode = " • "
+           | otherwise = " * "
