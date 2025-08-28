@@ -129,7 +129,7 @@ instance Consume Double   where consume = consumePrimitive
 instance Consume Float    where consume = consumePrimitive
 instance Consume Rational where consume = consumePrimitive
 instance Consume Integer  where consume = consumePrimitive
-instance (CoArbitrary a, RealFloat a) => Consume (Complex a) where
+instance CoArbitrary a => Consume (Complex a) where
   consume = consumePrimitive
 
 instance Consume ()

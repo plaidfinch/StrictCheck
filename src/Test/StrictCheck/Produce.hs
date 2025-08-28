@@ -34,8 +34,6 @@ import Test.StrictCheck.Curry
 
 import Generics.SOP
 import Data.Complex
-import Data.Monoid ((<>))
-
 
 -------------------------------------------------------
 -- The user interface for creating Produce instances --
@@ -206,7 +204,7 @@ instance Produce Float    where produce = arbitrary
 instance Produce Rational where produce = arbitrary
 instance Produce Integer  where produce = arbitrary
 
-instance (Arbitrary a, RealFloat a) => Produce (Complex a) where
+instance Arbitrary a => Produce (Complex a) where
   produce = arbitrary
 
 instance Produce a => Produce (Maybe a) where

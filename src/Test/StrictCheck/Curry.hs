@@ -21,6 +21,7 @@ module Test.StrictCheck.Curry
 
 import Prelude hiding (curry, uncurry)
 
+import Data.Kind (Type)
 import Data.Type.Equality
 import qualified Unsafe.Coerce as UNSAFE
 
@@ -36,7 +37,7 @@ import qualified Generics.SOP as SOP
 -- For example:
 --
 -- > Args (Int -> Bool -> Char)  ~  [Int, Bool]
-type family Args (f :: *) :: [*] where
+type family Args (f :: Type) :: [Type] where
   Args (a -> rest) = a : Args rest
   Args x           = '[]
 
@@ -50,7 +51,7 @@ type family Args (f :: *) :: [*] where
 --
 -- This infix unicode symbol is meant to evoke a function arrow with an
 -- ellipsis.
-type family (args :: [*]) ⋯-> (rest :: *) :: * where
+type family (args :: [Type]) ⋯-> (rest :: Type) :: Type where
   '[]        ⋯-> rest = rest
   (a : args) ⋯-> rest = a -> args ⋯-> rest
 
@@ -64,7 +65,7 @@ type args -..-> rest = args ⋯-> rest
 -- For example:
 --
 -- > Result (Int -> Bool -> Char)  ~  Char
-type family Result (f :: *) :: * where
+type family Result (f :: Type) :: Type where
   Result (a -> rest) = Result rest
   Result r           = r
 
@@ -91,14 +92,14 @@ withCurryIdentity r =
 -- | This currying mechanism is agnostic to the concrete heterogeneous list type
 -- used to carry arguments. The @List@ class abstracts over the nil and cons
 -- operations of a heterogeneous list: to use your own, just define an instance.
-class List (list :: [*] -> *) where
+class List (list :: [Type] -> Type) where
   nil    :: list '[]
   cons   :: x -> list xs -> list (x : xs)
   uncons :: list (x : xs) -> (x, list xs)
 
 -- | The Curry class witnesses that for any list of arguments, it is always
 -- possible to curry/uncurry at that arity
-class Curry (args :: [*]) where
+class Curry (args :: [Type]) where
   uncurry
     :: forall result list.
     List list => (args ⋯-> result) -> list args -> result

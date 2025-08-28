@@ -80,6 +80,7 @@ import qualified Test.QuickCheck as QC
 
 import Data.Char (ord)
 import Data.Function (on)
+import Data.Kind (Type)
 import Data.List
 import Data.Maybe
 import Data.IORef
@@ -138,7 +139,7 @@ newtype DemandComparison a =
 -- to manipulate these implicit demand representations when writing @Spec@s, and
 -- see the documentation for "Test.StrictCheck.Examples.Lists" for more examples
 -- of writing specifications.
-newtype Spec (args :: [*]) (result :: *)
+newtype Spec (args :: [Type]) (result :: Type)
   = Spec (forall r. (args ⋯-> r) -> result -> args ⋯-> r)
 
 -- | Unwrap a @Spec@ constructor, returning the contained CPS-ed specification
@@ -187,7 +188,7 @@ compareToSpecWith comparisons spec (Evaluation inputs inputsD resultD) =
       curryCollect @args (hcmap (Proxy @Shaped) (toDemand . unI))
 
 curryCollect
-  :: forall (xs :: [*]) r. Curry xs => (NP I xs -> r) -> xs ⋯-> r
+  :: forall (xs :: [Type]) r. Curry xs => (NP I xs -> r) -> xs ⋯-> r
 curryCollect k = Curry.curry @xs k
 
 -- | Checks if a given 'Evaluation' exactly matches the prediction of a given
@@ -296,7 +297,9 @@ strictCheckSpecExact spec function =
          strictnessViaSized
          (equalToSpec spec)
          function
-     (putStrLn . head . lines) (output result)
+     case lines (output result) of
+       line0 : _ -> putStrLn line0
+       [] -> pure ()
      case maybeExample of
        Nothing -> return ()
        Just example -> do

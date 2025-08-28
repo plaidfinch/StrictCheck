@@ -6,7 +6,6 @@ module Test.StrictCheck.TH
   )
 where
 
-import Control.Monad (when)
 import Generics.SOP (NP (..), NS (..))
 import Language.Haskell.TH
 import Test.StrictCheck.Demand

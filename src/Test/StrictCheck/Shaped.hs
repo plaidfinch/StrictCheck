@@ -86,6 +86,7 @@ import Data.Functor.Product
 import Data.Bifunctor
 import Data.Bifunctor.Flip
 import Data.Coerce
+import Data.Kind (Type)
 
 import Generics.SOP hiding ( Shape )
 
@@ -117,11 +118,11 @@ import Test.StrictCheck.Shaped.Flattened
 --
 -- The shape of a primitive type should be isomorphic to the primitive type,
 -- with the functor parameter left unused.
-class Typeable a => Shaped (a :: *) where
+class Typeable a => Shaped (a :: Type) where
   -- | The @Shape@ of an @a@ is a type isomorphic to the outermost level of
   -- structure in an @a@, parameterized by the functor @f@, which is wrapped
   -- around any fields (of any type) in the original @a@.
-  type Shape a :: (* -> *) -> *
+  type Shape a :: (Type -> Type) -> Type
   type Shape a = GShape a
 
   -- | Given a function to expand any @Shaped@ @x@ into an @f x@, expand an @a@
@@ -210,7 +211,7 @@ class Typeable a => Shaped (a :: *) where
 -- | A value of type @f % a@ has the same structure as an @a@, but with the
 -- structure of the functor @f@ interleaved at every field (including ones of
 -- types other than @a@). Read this type aloud as "a interleaved with f's".
-newtype (f :: * -> *) % (a :: *) :: * where
+newtype (f :: Type -> Type) % (a :: Type) :: Type where
   Wrap :: f (Shape a ((%) f)) -> f % a
 
 -- | Look inside a single level of an interleaved @f % a@. Inverse to the 'Wrap'
@@ -423,7 +424,7 @@ embedContainer e (Container x) = fmap e x
 -- type really is primitive, in that it contains no interesting substructure.
 -- If you use the @Prim@ representation inappropriately, StrictCheck will not be
 -- able to inspect the richer structure of the type in question.
-newtype Prim (x :: *) (f :: * -> *)
+newtype Prim (x :: Type) (f :: Type -> Type)
   = Prim x
   deriving (Eq, Ord, Show)
   deriving newtype (Num)
@@ -644,7 +645,7 @@ gRender :: forall a x. (HasDatatypeInfo a, GShaped a)
          => Shape a (K x) -> RenderLevel x
 gRender (GS demand) =
   case info of
-    ADT m d cs s ->
+    ADT m d cs _s ->
       renderC m d demand cs
     Newtype m d c ->
       renderC m d demand (c :* Nil)
