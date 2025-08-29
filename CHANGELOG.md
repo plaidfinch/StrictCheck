@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to the [Haskell Package Versioning Policy](https://pvp.haskell.org/).
 
+## [0.4.0] - 2025-08-30
+
+- Compatibility with GHC 9.2 - 9.12
+- Add `Shaped` and `Produce` instances for `NonEmpty`
+- Fix output for non-Unicode locales
+
+## [0.3.0] - 2019-11-01
+
+- Add `Show` instance for `Demand`
+
 ## [0.2.0] - 2018-10-08
 
 ### Added

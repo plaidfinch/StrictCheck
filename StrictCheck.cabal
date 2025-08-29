@@ -1,5 +1,5 @@
 name:                StrictCheck
-version:             0.3.0
+version:             0.4.0
 synopsis:            StrictCheck: Keep Your Laziness In Check
 description: StrictCheck is a property-based random testing framework for
              observing, specifying, and testing the strictness behaviors of Haskell
@@ -15,8 +15,8 @@ maintainer:          lysxia@gmail.com
 copyright:           (c) 2018 Kenneth Foner, Hengchu Zhang, and Leo Lampropoulos
 category:            Testing
 build-type:          Simple
-cabal-version:       >=1.10
-extra-source-files:  README.md
+cabal-version:       2.0
+extra-doc-files:     README.md, CHANGELOG.md
 tested-with:         GHC == 9.12.2, GHC == 9.6.7, GHC == 9.2.8
 
 source-repository this
@@ -29,11 +29,11 @@ library
   hs-source-dirs:      src
   default-language:    Haskell2010
   build-depends:       base             >= 4.7   && < 5,
+                       template-haskell >= 2.18  && < 2.24,
                        QuickCheck       >= 2.10  && < 2.17,
                        containers       >= 0.5   && < 0.9,
                        generics-sop     >= 0.3.2 && < 0.6,
-                       bifunctors       >= 5.5   && < 5.7,
-                       template-haskell >= 2.18  && < 2.24
+                       bifunctors       >= 5.5   && < 5.7
   exposed-modules:     Test.StrictCheck
                        Test.StrictCheck.Curry,
                        Test.StrictCheck.Consume,
@@ -78,7 +78,7 @@ test-suite test-strictcheck
                         MultiParamTypeClasses,
                         GeneralizedNewtypeDeriving, ViewPatterns,
                         PatternSynonyms
-  ghc-options:         -Wall -fno-warn-unused-imports -O2
+  ghc-options:         -Wall -fno-warn-unused-imports
   build-depends:        base,
                         StrictCheck,
                         QuickCheck
